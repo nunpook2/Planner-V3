@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planner V2 - Laboratory Task Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Premium Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 6px;
+            border: 3px solid transparent;
+            background-clip: content-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8; 
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background-color: #475569;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              'primary': { // Indigo - Professional & Trustworthy
+                '50': '#eef2ff', '100': '#e0e7ff', '200': '#c7d2fe', '300': '#a5b4fc', '400': '#818cf8', '500': '#6366f1', '600': '#4f46e5', '700': '#4338ca', '800': '#3730a3', '900': '#312e81',
+              },
+              'base': { // Slate - Clean & Modern Neutral
+                  '50': '#f8fafc',
+                  '100': '#f1f5f9',
+                  '200': '#e2e8f0',
+                  '300': '#cbd5e1',
+                  '400': '#94a3b8',
+                  '500': '#64748b',
+                  '600': '#475569',
+                  '700': '#334155',
+                  '800': '#1e293b',
+                  '900': '#0f172a',
+              },
+              'status-urgent': '#ef4444',
+              'status-normal': '#3b82f6',
+              'status-pocat': '#f97316',
+              'status-manual': '#a855f7',
+              'status-prepare': '#f59e0b',
+              'status-done': '#10b981',
+              'status-notok': '#dc2626',
+              'status-lsp': '#06b6d4', // Cyan for LSP
+            },
+            animation: {
+                'fade-in': 'fadeIn 0.4s ease-out forwards',
+                'slide-in-up': 'slideInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                'pulse-subtle': 'pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+                fadeIn: {
+                    '0%': { opacity: 0 },
+                    '100%': { opacity: 1 },
+                },
+                slideInUp: {
+                    '0%': { transform: 'translateY(15px)', opacity: 0 },
+                    '100%': { transform: 'translateY(0)', opacity: 1 },
+                },
+                pulseSubtle: {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: .85 },
+                }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body class="bg-base-50 dark:bg-base-900 text-base-800 dark:text-base-200 antialiased selection:bg-primary-100 selection:text-primary-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  </body>
+</html>
