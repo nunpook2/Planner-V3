@@ -931,14 +931,25 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                                     const isUrgentPriority = row.originalTasks.some(ot => ot.tasks.some(t => String(getTaskValue(t, 'Priority')).toLowerCase() === 'urgent'));
                                     const isSprint = row.originalTasks.some(ot => ot.tasks.some(t => String(getTaskValue(t, 'Purpose')).toLowerCase() === 'sprint'));
                                     
+                                    const checkFields = ['Purpose', 'Priority', 'Remark (Requester)', 'Note to planer', 'Additional Information'];
+
                                     // Robust LSP check
                                     const isLSP = row.originalTasks.some(ot => ot.tasks.some(t => {
-                                         const fields = ['Purpose', 'Priority', 'Remark (Requester)', 'Note to planer', 'Additional Information'];
-                                         return fields.some(f => String(getTaskValue(t, f)).toLowerCase().includes('lsp'));
+                                         return checkFields.some(f => String(getTaskValue(t, f)).toLowerCase().includes('lsp'));
                                     }));
-                                    const isPoCat = row.originalTasks.some(ot => ot.category === TaskCategory.PoCat);
                                     
-                                    const isUrgent = isUrgentPriority; // For status line color logic, urgent implies priority
+                                    // Robust PoCat detection
+                                    const isPoCatText = row.originalTasks.some(ot => ot.tasks.some(t => {
+                                         return checkFields.some(f => {
+                                            const val = String(getTaskValue(t, f)).toLowerCase().replace(/\s/g, '');
+                                            return val.includes('pocat');
+                                         });
+                                    }));
+                                    
+                                    const isPoCatCategory = row.originalTasks.some(ot => ot.category === TaskCategory.PoCat);
+                                    const isPoCat = isPoCatText || isPoCatCategory;
+                                    
+                                    const isUrgent = isUrgentPriority; 
 
                                     const dueDate = row.originalTasks.flatMap(t => t.tasks).find(t => getTaskValue(t, 'Due finish')) ? formatDate(getTaskValue(row.originalTasks.flatMap(t => t.tasks).find(t => getTaskValue(t, 'Due finish'))!, 'Due finish')) : '';
 

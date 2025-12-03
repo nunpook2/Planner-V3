@@ -188,7 +188,8 @@ const ImportTab: React.FC<ImportTabProps> = ({ onTasksUpdated }) => {
                             </button>
                         ))}
                     </div>
-                     <button onClick={processData} disabled={isProcessing} className="w-full px-4 py-3 bg-gradient-to-r from-secondary-500 to-secondary-600 text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 shadow-md">
+                     {/* FIXED: Changed from secondary-500/600 to primary-600/700 to ensure visibility */}
+                     <button onClick={processData} disabled={isProcessing} className="w-full px-4 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 shadow-md">
                         {isProcessing ? 'Processing...' : 'Process Data'}
                     </button>
                 </div>
@@ -204,10 +205,20 @@ const ImportTab: React.FC<ImportTabProps> = ({ onTasksUpdated }) => {
                         {groupedTasks.map((groupedTask) => {
                              const isUrgent = groupedTask.tasks.some(task => String(getTaskValue(task, 'Priority')).toLowerCase() === 'urgent');
                              const isSprint = groupedTask.tasks.some(task => String(getTaskValue(task, 'Purpose')).toLowerCase() === 'sprint');
-                             // Robust LSP detection check multiple fields
+                             
+                             const checkFields = ['Purpose', 'Priority', 'Remark (Requester)', 'Note to planer', 'Additional Information'];
+                             
+                             // Robust LSP detection
                              const isLSP = groupedTask.tasks.some(task => {
-                                const fields = ['Purpose', 'Priority', 'Remark (Requester)', 'Note to planer', 'Additional Information'];
-                                return fields.some(f => String(getTaskValue(task, f)).toLowerCase().includes('lsp'));
+                                return checkFields.some(f => String(getTaskValue(task, f)).toLowerCase().includes('lsp'));
+                             });
+                             
+                             // Robust PoCat detection (ignores spaces/case)
+                             const isPoCat = groupedTask.tasks.some(task => {
+                                return checkFields.some(f => {
+                                    const val = String(getTaskValue(task, f)).toLowerCase().replace(/\s/g, '');
+                                    return val.includes('pocat');
+                                });
                              });
 
                             const handleButtonClick = (e: React.MouseEvent, category: TaskCategory) => { e.stopPropagation(); handleCategorize(groupedTask, category); };
@@ -224,6 +235,7 @@ const ImportTab: React.FC<ImportTabProps> = ({ onTasksUpdated }) => {
                                          {isSprint && <span className="px-2 py-1 text-xs font-semibold text-white bg-status-urgent rounded-full animate-pulse-subtle">Sprint</span>}
                                          {isUrgent && !isSprint && <span className="px-2 py-1 text-xs font-semibold text-white bg-status-urgent rounded-full animate-pulse-subtle">Urgent</span>}
                                          {isLSP && <span className="px-2 py-1 text-xs font-semibold text-white bg-status-lsp rounded-full shadow-sm">LSP</span>}
+                                         {isPoCat && <span className="px-2 py-1 text-xs font-semibold text-white bg-status-pocat rounded-full shadow-sm">PoCat</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={(e) => handleButtonClick(e, TaskCategory.Urgent)} className="px-3 py-1.5 text-xs font-semibold bg-status-urgent text-white rounded-md hover:opacity-90 transition-opacity">Urgent</button>
