@@ -982,6 +982,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                             </tbody>
                         </table>
                     </div>
+                    )
                  )}
             </div>
         </div>
