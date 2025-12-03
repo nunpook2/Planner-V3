@@ -218,6 +218,26 @@ export const returnTaskToPool = async (categorizedTask: CategorizedTask): Promis
     await getCollection('categorizedTasks').add(payload);
 };
 
+// New function: Planner Unassign (Returns to pool WITHOUT 'returned' flag)
+export const unassignTaskToPool = async (categorizedTask: CategorizedTask): Promise<void> => {
+    // Reset status fields to make it look like a fresh task
+    const cleanTasks = categorizedTask.tasks.map(t => {
+        const { status, notOkReason, returnReason, returnedBy, isReturned, preparationStatus, ...rest } = t;
+        return rest as RawTask;
+    });
+
+    const payload = {
+        ...categorizedTask,
+        tasks: cleanTasks,
+        // Ensure NO returned flags on the group
+        returnReason: null,
+        returnedBy: null,
+        isReturnedPool: false
+    };
+    
+    await getCollection('categorizedTasks').add(payload);
+};
+
 // --- BATCH HELPERS ---
 const deleteInBatches = async (refs: any[]) => {
     if (!firestore) throw new Error("Database not initialized");

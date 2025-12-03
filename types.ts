@@ -42,6 +42,7 @@ export interface CategorizedTask {
     isReturnedPool?: boolean; // Flag to identify a dedicated pool for returned tasks
     order?: number; // User-defined sort order
     createdAt?: string; // Timestamp for returned tasks
+    shift?: 'day' | 'night'; // Shift context when the task was returned
 }
 
 export interface GroupedTask {

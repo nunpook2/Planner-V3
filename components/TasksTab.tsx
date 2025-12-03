@@ -799,15 +799,21 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                         )}
                     </div>
                     
-                    {activeCategory !== TaskCategory.Manual && (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-base-100 dark:border-base-700 pt-4">
+                    {/* ALWAYS VISIBLE FILTERS FOR DATE/SHIFT (MODIFIED) */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-base-100 dark:border-base-700 pt-4">
+                        {activeCategory !== TaskCategory.Manual ? (
                             <input type="text" placeholder="Filter by Request ID..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 focus:bg-white focus:ring-2 focus:ring-primary-100 transition-all"/>
-                            <div><label className="text-xs font-bold text-base-400 uppercase ml-1">Assigned Date</label><input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 focus:bg-white focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"/></div>
-                            <div><label className="text-xs font-bold text-base-400 uppercase ml-1">Current Shift</label><select value={selectedShift} onChange={e => setSelectedShift(e.target.value as 'day'|'night')} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 focus:bg-white focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="md:col-span-2 flex items-center p-2.5 bg-base-50 dark:bg-base-900/50 rounded-xl text-base-400 italic border border-transparent">
+                                Create and manage manual ad-hoc tasks here.
+                            </div>
+                        )}
+                        <div><label className="text-xs font-bold text-base-400 uppercase ml-1">Assigned Date</label><input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 focus:bg-white focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"/></div>
+                        <div><label className="text-xs font-bold text-base-400 uppercase ml-1">Current Shift</label><select value={selectedShift} onChange={e => setSelectedShift(e.target.value as 'day'|'night')} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 focus:bg-white focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
+                    </div>
                 </div>
                 
+                {/* ACTION BAR (Different for Manual/Standard) */}
                 {activeCategory !== TaskCategory.Manual && (
                     <div className="p-3 bg-primary-50 dark:bg-primary-900/10 rounded-xl border border-primary-100 dark:border-primary-900/20 flex justify-between items-center sticky top-0 z-30 backdrop-blur-md bg-opacity-80">
                         <div className="flex items-center gap-3">

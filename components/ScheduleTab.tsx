@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Tester, AssignedTask, RawTask, CategorizedTask, AssignedPrepareTask } from '../types';
 import { TaskStatus, TaskCategory } from '../types';
-import { getAssignedTasks, updateAssignedTask, deleteAssignedTask, returnTaskToPool, getAssignedPrepareTasks, markItemAsPrepared, getCategorizedTasks } from '../services/dataService';
-import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, ChevronDownIcon } from './common/Icons';
+import { getAssignedTasks, updateAssignedTask, deleteAssignedTask, returnTaskToPool, getAssignedPrepareTasks, markItemAsPrepared, getCategorizedTasks, unassignTaskToPool } from '../services/dataService';
+import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, ChevronDownIcon, RefreshIcon } from './common/Icons';
 
 declare const XLSX: any;
 
@@ -146,24 +146,21 @@ const DetailedView: React.FC<{
     data: { testerName: string; testingTasks: AssignedTask[]; prepareTasks: AssignedPrepareTask[]; }[];
     onStatusChange: (docId: string, index: number, status: TaskStatus) => void;
     onReturn: (docId: string, index: number) => void;
+    onPlannerUnassign: (docId: string, index: number) => void;
     onMarkPrepared: (prepTask: AssignedPrepareTask, itemIndex: number) => void;
     visibleColumns: Set<string>;
-}> = ({ data, onStatusChange, onReturn, onMarkPrepared, visibleColumns }) => {
+}> = ({ data, onStatusChange, onReturn, onPlannerUnassign, onMarkPrepared, visibleColumns }) => {
     const renderCombinedTable = (assignments: (AssignedTask | AssignedPrepareTask)[], type: 'testing' | 'prepare') => {
         const isPrep = type === 'prepare';
         const allItemsRaw = assignments.flatMap(assignment => assignment.tasks.map((task, index) => ({ task, originalIndex: index, parentDocId: assignment.id, parentAssignment: assignment, requestId: assignment.requestId })));
         
         // --- ROBUST DEDUPLICATION LOGIC ---
-        // Filters out duplicates using _id if available, falling back to content hash for legacy data.
         const seenKeys = new Set<string>();
         const allItems = allItemsRaw.filter(item => {
             if (!isValidTask(item.task)) return false;
-            
-            // Unique Key: ID OR Content Hash
             const uniqueKey = item.task._id 
                 ? item.task._id 
                 : `${item.requestId}|${getTaskValue(item.task, 'Sample Name')}|${getTaskValue(item.task, 'Description')}|${getTaskValue(item.task, 'Variant')}`;
-
             if (seenKeys.has(uniqueKey)) return false;
             seenKeys.add(uniqueKey);
             return true;
@@ -179,7 +176,7 @@ const DetailedView: React.FC<{
                         <tr>
                             {!isPrep && <th className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 w-24">Status</th>}
                             {activeCols.map(h => <th key={h} className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 whitespace-nowrap">{h}</th>)}
-                            <th className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 text-right w-28">Actions</th>
+                            <th className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 text-right w-36">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-base-100">
@@ -196,7 +193,8 @@ const DetailedView: React.FC<{
                                         <div className="flex gap-1 justify-end">
                                             <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.Done)} className="text-base-300 hover:text-emerald-500 hover:bg-emerald-50 p-1.5 rounded transition-all" title="Mark Done"><CheckCircleIcon className="h-5 w-5"/></button>
                                             <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.NotOK)} className="text-base-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-all" title="Mark Not OK"><XCircleIcon className="h-5 w-5"/></button>
-                                            <button onClick={() => onReturn(parentDocId, originalIndex)} className="text-base-300 hover:text-orange-500 hover:bg-orange-50 p-1.5 rounded transition-all" title="Return Task"><ArrowUturnLeftIcon className="h-5 w-5"/></button>
+                                            <button onClick={() => onReturn(parentDocId, originalIndex)} className="text-base-300 hover:text-orange-500 hover:bg-orange-50 p-1.5 rounded transition-all" title="Return Task (With Reason)"><ArrowUturnLeftIcon className="h-5 w-5"/></button>
+                                            <button onClick={() => onPlannerUnassign(parentDocId, originalIndex)} className="text-base-300 hover:text-blue-500 hover:bg-blue-50 p-1.5 rounded transition-all" title="Re-plan (Unassign without reason)"><RefreshIcon className="h-5 w-5"/></button>
                                         </div>
                                     )}
                                 </td>
@@ -245,7 +243,19 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
     const { filteredTestingTasks, filteredPrepareTasks, filteredReturnedTasks } = useMemo(() => {
         const startDate = new Date(filters.startDate); const endDate = new Date(filters.endDate); endDate.setHours(23, 59, 59, 999);
         const filterTask = (task: any) => { const d = new Date(task.assignedDate); return d >= startDate && d <= endDate && (filters.testerId === 'all' || (task.testerId || task.assistantId) === filters.testerId) && (filters.shift === 'all' || task.shift === filters.shift); };
-        const returned = returnedTasksPool.filter(task => { if (!task.isReturnedPool && !task.tasks.some(t => t.isReturned)) return false; const d = task.createdAt ? new Date(task.createdAt) : new Date(); if (d < startDate || d > endDate) return false; const r = task.returnedBy || task.tasks.find(t => t.returnedBy)?.returnedBy; if (!r) return false; if (filters.testerId !== 'all' && testers.find(t => t.id === filters.testerId)?.name !== r) return false; return true; });
+        
+        const returned = returnedTasksPool.filter(task => { 
+            if (!task.isReturnedPool && !task.tasks.some(t => t.isReturned)) return false; 
+            const d = task.createdAt ? new Date(task.createdAt) : new Date(); 
+            if (d < startDate || d > endDate) return false; 
+            const r = task.returnedBy || task.tasks.find(t => t.returnedBy)?.returnedBy; 
+            if (!r) return false; 
+            if (filters.testerId !== 'all' && testers.find(t => t.id === filters.testerId)?.name !== r) return false; 
+            // FIXED: Filter returned tasks by shift
+            if (filters.shift !== 'all' && task.shift && task.shift !== filters.shift) return false;
+            return true; 
+        });
+
         return { filteredTestingTasks: assignedTestingTasks.filter(filterTask), filteredPrepareTasks: assignedPrepareTasks.filter(filterTask), filteredReturnedTasks: returned };
     }, [assignedTestingTasks, assignedPrepareTasks, returnedTasksPool, filters, testers]);
 
@@ -254,23 +264,15 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
         const getPersonSummary = (name: string): SummaryPersonData => { if (!summaryMap.has(name)) summaryMap.set(name, { testerName: name, total: 0, done: 0, notOk: 0, returned: 0, taskGroups: [] }); return summaryMap.get(name)!; };
         const addItemToSummary = (person: SummaryPersonData, desc: string, sampleName: string, status: any, remark?: string, requestId: string = '', category?: TaskCategory) => { person.total++; if (status === TaskStatus.Done || status === 'Prepared') person.done++; if (status === TaskStatus.NotOK) person.notOk++; if (status === 'Returned') person.returned++; let group = person.taskGroups.find(g => g.description === desc); if (!group) { group = { description: desc, total: 0, done: 0, items: [] }; person.taskGroups.push(group); } group.total++; if (status === TaskStatus.Done || status === 'Prepared') group.done++; group.items.push({ sampleName, status, remark, requestId, category }); };
         
-        // --- STRICT DEDUPLICATION FIX ---
-        // Track unique items to prevent double counting. 
-        // Falls back to content-based hash for legacy tasks without _id.
+        // --- STRICT DEDUPLICATION LOGIC ---
         const seenTestingKeys = new Set<string>();
         const seenPrepareKeys = new Set<string>();
 
         filteredTestingTasks.forEach(task => task.testerName && task.tasks.forEach(item => {
             if (!isValidTask(item)) return;
-            
-            // Unique Key: ID OR Content Hash
-            const uniqueKey = item._id 
-                ? item._id 
-                : `${task.requestId}|${getTaskValue(item, 'Sample Name')}|${getTaskValue(item.task, 'Description')}|${getTaskValue(item.task, 'Variant')}`;
-
+            const uniqueKey = item._id ? item._id : `${task.requestId}|${getTaskValue(item, 'Sample Name')}|${getTaskValue(item.task, 'Description')}|${getTaskValue(item.task, 'Variant')}`;
             if (seenTestingKeys.has(uniqueKey)) return; 
             seenTestingKeys.add(uniqueKey);
-            
             addItemToSummary(getPersonSummary(task.testerName), (getTaskValue(item, 'Description') || getTaskValue(item, 'Sample Name') || 'N/A').toString(), (getTaskValue(item, 'Sample Name') || '').toString(), item.status || TaskStatus.Pending, item.notOkReason || undefined, task.requestId, task.category);
         }));
 
@@ -278,15 +280,9 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
         
         filteredPrepareTasks.forEach(task => task.assistantName && task.tasks.forEach(item => {
             if (!isValidTask(item)) return;
-            
-            // Unique Key: ID OR Content Hash
-            const uniqueKey = item._id 
-                ? item._id 
-                : `${task.requestId}|${getTaskValue(item, 'Sample Name')}|${getTaskValue(item.task, 'Description')}`; // Prepare task might slightly differ in structure, but this is safe.
-
+            const uniqueKey = item._id ? item._id : `${task.requestId}|${getTaskValue(item, 'Sample Name')}|${getTaskValue(item.task, 'Description')}`;
             if (seenPrepareKeys.has(uniqueKey)) return; 
             seenPrepareKeys.add(uniqueKey);
-
             addItemToSummary(getPersonSummary(task.assistantName), `[Prep] ${getTaskValue(item, 'Description') || getTaskValue(item, 'Sample Name')}`, (getTaskValue(item, 'Sample Name') || '').toString(), item.preparationStatus === 'Prepared' ? 'Prepared' : 'Pending', undefined, task.requestId, task.category);
         }));
         
@@ -303,62 +299,103 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
 
     const handleStatusChange = (docId: string, index: number, status: TaskStatus) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (!task) return; if (status === TaskStatus.NotOK) setReasonPrompt({ action: 'notOk', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); else { const original = assignedTestingTasks.find(t => t.id === docId); if (original) { const up = [...original.tasks]; up[index] = { ...up[index], status, notOkReason: null }; updateAssignedTask(docId, { tasks: up }).then(fetchTasks); } } };
     const handleReturnTask = (docId: string, index: number) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (task) setReasonPrompt({ action: 'return', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); };
-    const handleReasonSubmit = async (reason: string) => { if (!reasonPrompt) return; const { action, docId, index } = reasonPrompt; const original = assignedTestingTasks.find(t => t.id === docId); if (!original) return; setReasonPrompt(null); try { if (action === 'notOk') { const up = [...original.tasks]; up[index] = { ...up[index], status: TaskStatus.NotOK, notOkReason: reason }; await updateAssignedTask(docId, { tasks: up }); } else { const item = original.tasks[index]; const ret = { ...item, status: TaskStatus.Pending, notOkReason: null, isReturned: true, returnReason: reason, returnedBy: original.testerName || 'Unknown' }; const pay: CategorizedTask = { id: original.requestId, tasks: [ret], category: original.category, returnReason: reason, returnedBy: original.testerName || 'Unknown', isReturnedPool: true }; await returnTaskToPool(pay); const rem = original.tasks.filter((_, i) => i !== index); if (rem.length === 0) await deleteAssignedTask(docId); else await updateAssignedTask(docId, { tasks: rem }); onTasksUpdated(); } } catch (e) { console.error(e); } finally { await fetchTasks(); } };
+    
+    // Planner Unassign: Returns task to pool WITHOUT marking it as "Returned" (No reason required)
+    const handlePlannerUnassign = async (docId: string, index: number) => {
+        const original = assignedTestingTasks.find(t => t.id === docId);
+        if (!original) return;
+        const item = original.tasks[index];
+        if (!item) return;
+
+        try {
+            // Clean unassign: Add to categorizedTasks without 'isReturned' flags
+            const payload: CategorizedTask = { 
+                id: original.requestId, 
+                tasks: [item], 
+                category: original.category,
+                // Do NOT set isReturnedPool or returnReason here
+            };
+            await unassignTaskToPool(payload);
+
+            const rem = original.tasks.filter((_, i) => i !== index);
+            if (rem.length === 0) await deleteAssignedTask(docId);
+            else await updateAssignedTask(docId, { tasks: rem });
+            
+            onTasksUpdated();
+            await fetchTasks();
+        } catch (e) {
+            console.error(e);
+            alert("Failed to unassign task");
+        }
+    };
+
+    const handleReasonSubmit = async (reason: string) => { 
+        if (!reasonPrompt) return; 
+        const { action, docId, index } = reasonPrompt; 
+        const original = assignedTestingTasks.find(t => t.id === docId); 
+        if (!original) return; 
+        setReasonPrompt(null); 
+        try { 
+            if (action === 'notOk') { 
+                const up = [...original.tasks]; 
+                up[index] = { ...up[index], status: TaskStatus.NotOK, notOkReason: reason }; 
+                await updateAssignedTask(docId, { tasks: up }); 
+            } else { 
+                const item = original.tasks[index]; 
+                const ret = { ...item, status: TaskStatus.Pending, notOkReason: null, isReturned: true, returnReason: reason, returnedBy: original.testerName || 'Unknown' }; 
+                
+                // FIXED: Pass original assignment shift to the returned task payload
+                const pay: CategorizedTask = { 
+                    id: original.requestId, 
+                    tasks: [ret], 
+                    category: original.category, 
+                    returnReason: reason, 
+                    returnedBy: original.testerName || 'Unknown', 
+                    isReturnedPool: true,
+                    shift: original.shift 
+                }; 
+                await returnTaskToPool(pay); 
+                
+                const rem = original.tasks.filter((_, i) => i !== index); 
+                if (rem.length === 0) await deleteAssignedTask(docId); 
+                else await updateAssignedTask(docId, { tasks: rem }); 
+                onTasksUpdated(); 
+            } 
+        } catch (e) { 
+            console.error(e); 
+        } finally { 
+            await fetchTasks(); 
+        } 
+    };
+    
     const handleMarkItemAsPrepared = async (prepTask: AssignedPrepareTask, itemIndex: number) => { await markItemAsPrepared(prepTask, itemIndex); await fetchTasks(); onTasksUpdated(); };
     
-    // --- EXPORT FUNCTION ---
     const exportToExcel = () => {
         try {
             const flattenedData: any[] = [];
-            
-            // Process Testing Tasks
             detailedData.forEach(person => {
                 person.testingTasks.forEach((assignment: AssignedTask) => {
                     assignment.tasks.forEach((task, idx) => {
                         if (!isValidTask(task)) return;
                         flattenedData.push({
-                            'Type': 'Testing',
-                            'Assigned To': person.testerName,
-                            'Request ID': assignment.requestId.replace('RS1-', ''),
-                            'Sample Name': getTaskValue(task, 'Sample Name'),
-                            'Description': getTaskValue(task, 'Description'),
-                            'Variant': getTaskValue(task, 'Variant'),
-                            'Status': task.status || 'Pending',
-                            'Due Date': formatDate(getTaskValue(task, 'Due finish')),
-                            'Priority': getTaskValue(task, 'Priority'),
-                            'PoCat': assignment.category === TaskCategory.PoCat ? 'Yes' : 'No'
+                            'Type': 'Testing', 'Assigned To': person.testerName, 'Request ID': assignment.requestId.replace('RS1-', ''), 'Sample Name': getTaskValue(task, 'Sample Name'), 'Description': getTaskValue(task, 'Description'), 'Variant': getTaskValue(task, 'Variant'), 'Status': task.status || 'Pending', 'Due Date': formatDate(getTaskValue(task, 'Due finish')), 'Priority': getTaskValue(task, 'Priority'), 'PoCat': assignment.category === TaskCategory.PoCat ? 'Yes' : 'No'
                         });
                     });
                 });
-                
-                // Process Preparation Tasks
                 person.prepareTasks.forEach((assignment: AssignedPrepareTask) => {
                     assignment.tasks.forEach((task, idx) => {
                         if (!isValidTask(task)) return;
                         flattenedData.push({
-                            'Type': 'Preparation',
-                            'Assigned To': person.testerName,
-                            'Request ID': assignment.requestId.replace('RS1-', ''),
-                            'Sample Name': getTaskValue(task, 'Sample Name'),
-                            'Description': getTaskValue(task, 'Description'),
-                            'Variant': getTaskValue(task, 'Variant'),
-                            'Status': task.preparationStatus || 'Awaiting',
-                            'Due Date': formatDate(getTaskValue(task, 'Due finish')),
-                            'Priority': getTaskValue(task, 'Priority'),
-                            'PoCat': assignment.category === TaskCategory.PoCat ? 'Yes' : 'No'
+                            'Type': 'Preparation', 'Assigned To': person.testerName, 'Request ID': assignment.requestId.replace('RS1-', ''), 'Sample Name': getTaskValue(task, 'Sample Name'), 'Description': getTaskValue(task, 'Description'), 'Variant': getTaskValue(task, 'Variant'), 'Status': task.preparationStatus || 'Awaiting', 'Due Date': formatDate(getTaskValue(task, 'Due finish')), 'Priority': getTaskValue(task, 'Priority'), 'PoCat': assignment.category === TaskCategory.PoCat ? 'Yes' : 'No'
                         });
                     });
                 });
             });
-
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.json_to_sheet(flattenedData);
             XLSX.utils.book_append_sheet(wb, ws, "Schedule Export");
             XLSX.writeFile(wb, `Schedule_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-        } catch (e) {
-            console.error("Export failed", e);
-            alert("Failed to export data. Please try again.");
-        }
+        } catch (e) { console.error("Export failed", e); alert("Failed to export data. Please try again."); }
     };
 
     const toggleColumn = (col: string) => setVisibleColumns(p => { const n = new Set(p); n.has(col) ? n.delete(col) : n.add(col); return n; });
@@ -373,13 +410,16 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
                         <div><label className="text-xs font-bold text-base-400 uppercase">Start Date</label><input type="date" value={filters.startDate} onChange={e => setFilters(f => ({ ...f, startDate: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"/></div>
                         <div><label className="text-xs font-bold text-base-400 uppercase">End Date</label><input type="date" value={filters.endDate} onChange={e => setFilters(f => ({ ...f, endDate: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"/></div>
                         <div><label className="text-xs font-bold text-base-400 uppercase">Personnel</label><select value={filters.testerId} onChange={e => setFilters(f => ({ ...f, testerId: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"><option value="all">All Personnel</option>{testers.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-                        <div className="relative" ref={colSelectorRef}><label className="text-xs font-bold text-base-400 uppercase">Columns</label><button onClick={() => setIsColSelectorOpen(!isColSelectorOpen)} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 border-transparent hover:bg-base-100 flex justify-between items-center text-sm font-medium transition-colors"><span>{visibleColumns.size} Selected</span><ChevronDownIcon className="h-4 w-4 text-base-500"/></button>{isColSelectorOpen && (<div className="absolute top-full left-0 w-56 mt-2 bg-white rounded-xl shadow-xl border border-base-200 z-50 p-2 overflow-hidden animate-fade-in"><div className="text-xs font-bold text-base-400 uppercase px-2 py-1 mb-1">Visible Columns</div>{ALL_COLUMNS.map(col => (<label key={col} className="flex items-center gap-2 p-2 hover:bg-base-50 rounded-lg cursor-pointer transition-colors"><input type="checkbox" checked={visibleColumns.has(col)} onChange={() => toggleColumn(col)} className="rounded text-primary-600 focus:ring-primary-500"/><span className="text-sm text-base-700">{col}</span></label>))}</div>)}</div>
+                        <div><label className="text-xs font-bold text-base-400 uppercase">Shift</label><select value={filters.shift} onChange={e => setFilters(f => ({ ...f, shift: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"><option value="all">All Shifts</option><option value="day">Day</option><option value="night">Night</option></select></div>
                      </div>
-                     <button onClick={exportToExcel} className="w-full h-[42px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"><span>Export Excel</span></button>
+                     <div className="relative" ref={colSelectorRef}><button onClick={() => setIsColSelectorOpen(!isColSelectorOpen)} className="w-full h-[42px] bg-base-100 hover:bg-base-200 text-base-700 font-bold rounded-xl border border-base-200 transition-colors flex items-center justify-between px-4 text-sm"><span>Columns ({visibleColumns.size})</span><ChevronDownIcon className="h-4 w-4"/></button>{isColSelectorOpen && (<div className="absolute bottom-full left-0 w-56 mb-2 bg-white rounded-xl shadow-xl border border-base-200 z-50 p-2 overflow-hidden animate-fade-in"><div className="text-xs font-bold text-base-400 uppercase px-2 py-1 mb-1">Visible Columns</div>{ALL_COLUMNS.map(col => (<label key={col} className="flex items-center gap-2 p-2 hover:bg-base-50 rounded-lg cursor-pointer transition-colors"><input type="checkbox" checked={visibleColumns.has(col)} onChange={() => toggleColumn(col)} className="rounded text-primary-600 focus:ring-primary-500"/><span className="text-sm text-base-700">{col}</span></label>))}</div>)}</div>
+                </div>
+                <div className="flex justify-end">
+                     <button onClick={exportToExcel} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95 flex items-center gap-2"><span>Export Excel</span></button>
                 </div>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                 {isLoading ? <div className="p-12 text-center text-base-400 font-medium">Loading schedule...</div> : detailedData.length > 0 || summaryData.length > 0 ? (viewMode === 'summary' ? <SummaryView data={summaryData} /> : <DetailedView data={detailedData} onStatusChange={handleStatusChange} onReturn={handleReturnTask} onMarkPrepared={handleMarkItemAsPrepared} visibleColumns={visibleColumns} />) : <div className="p-12 text-center text-base-400 font-medium">No schedule data found for today.</div>}
+                 {isLoading ? <div className="p-12 text-center text-base-400 font-medium">Loading schedule...</div> : detailedData.length > 0 || summaryData.length > 0 ? (viewMode === 'summary' ? <SummaryView data={summaryData} /> : <DetailedView data={detailedData} onStatusChange={handleStatusChange} onReturn={handleReturnTask} onPlannerUnassign={handlePlannerUnassign} onMarkPrepared={handleMarkItemAsPrepared} visibleColumns={visibleColumns} />) : <div className="p-12 text-center text-base-400 font-medium">No schedule data found for today.</div>}
             </div>
         </div>
     );
