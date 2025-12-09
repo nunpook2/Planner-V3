@@ -251,7 +251,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
             const r = task.returnedBy || task.tasks.find(t => t.returnedBy)?.returnedBy; 
             if (!r) return false; 
             if (filters.testerId !== 'all' && testers.find(t => t.id === filters.testerId)?.name !== r) return false; 
-            // FIXED: Filter returned tasks by shift
             if (filters.shift !== 'all' && task.shift && task.shift !== filters.shift) return false;
             return true; 
         });
@@ -264,7 +263,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
         const getPersonSummary = (name: string): SummaryPersonData => { if (!summaryMap.has(name)) summaryMap.set(name, { testerName: name, total: 0, done: 0, notOk: 0, returned: 0, taskGroups: [] }); return summaryMap.get(name)!; };
         const addItemToSummary = (person: SummaryPersonData, desc: string, sampleName: string, status: any, remark?: string, requestId: string = '', category?: TaskCategory) => { person.total++; if (status === TaskStatus.Done || status === 'Prepared') person.done++; if (status === TaskStatus.NotOK) person.notOk++; if (status === 'Returned') person.returned++; let group = person.taskGroups.find(g => g.description === desc); if (!group) { group = { description: desc, total: 0, done: 0, items: [] }; person.taskGroups.push(group); } group.total++; if (status === TaskStatus.Done || status === 'Prepared') group.done++; group.items.push({ sampleName, status, remark, requestId, category }); };
         
-        // --- STRICT DEDUPLICATION LOGIC ---
         const seenTestingKeys = new Set<string>();
         const seenPrepareKeys = new Set<string>();
 
@@ -300,7 +298,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
     const handleStatusChange = (docId: string, index: number, status: TaskStatus) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (!task) return; if (status === TaskStatus.NotOK) setReasonPrompt({ action: 'notOk', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); else { const original = assignedTestingTasks.find(t => t.id === docId); if (original) { const up = [...original.tasks]; up[index] = { ...up[index], status, notOkReason: null }; updateAssignedTask(docId, { tasks: up }).then(fetchTasks); } } };
     const handleReturnTask = (docId: string, index: number) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (task) setReasonPrompt({ action: 'return', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); };
     
-    // Planner Unassign: Returns task to pool WITHOUT marking it as "Returned" (No reason required)
     const handlePlannerUnassign = async (docId: string, index: number) => {
         const original = assignedTestingTasks.find(t => t.id === docId);
         if (!original) return;
@@ -308,12 +305,10 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
         if (!item) return;
 
         try {
-            // Clean unassign: Add to categorizedTasks without 'isReturned' flags
             const payload: CategorizedTask = { 
                 id: original.requestId, 
                 tasks: [item], 
                 category: original.category,
-                // Do NOT set isReturnedPool or returnReason here
             };
             await unassignTaskToPool(payload);
 
@@ -343,8 +338,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
             } else { 
                 const item = original.tasks[index]; 
                 const ret = { ...item, status: TaskStatus.Pending, notOkReason: null, isReturned: true, returnReason: reason, returnedBy: original.testerName || 'Unknown' }; 
-                
-                // FIXED: Pass original assignment shift to the returned task payload
                 const pay: CategorizedTask = { 
                     id: original.requestId, 
                     tasks: [ret], 
@@ -372,55 +365,157 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
     
     const exportToExcel = () => {
         try {
-            const flattenedData: any[] = [];
+            // --- SET 1: Internal View (Original) ---
+            const internalRows: any[] = [];
             detailedData.forEach(person => {
-                person.testingTasks.forEach((assignment: AssignedTask) => {
-                    assignment.tasks.forEach((task, idx) => {
-                        if (!isValidTask(task)) return;
-                        flattenedData.push({
-                            'Type': 'Testing', 'Assigned To': person.testerName, 'Request ID': assignment.requestId.replace('RS1-', ''), 'Sample Name': getTaskValue(task, 'Sample Name'), 'Description': getTaskValue(task, 'Description'), 'Variant': getTaskValue(task, 'Variant'), 'Status': task.status || 'Pending', 'Due Date': formatDate(getTaskValue(task, 'Due finish')), 'Priority': getTaskValue(task, 'Priority'), 'PoCat': assignment.category === TaskCategory.PoCat ? 'Yes' : 'No'
+                const tasks = [...person.testingTasks, ...person.prepareTasks];
+                tasks.forEach(group => {
+                     const isPrep = group.hasOwnProperty('assistantId');
+                     group.tasks.forEach(t => {
+                        if (!isValidTask(t)) return;
+                        const row: any = { 'Assigned Person': person.testerName, 'Type': isPrep ? 'Preparation' : 'Testing', 'Status': t.status || t.preparationStatus || 'Pending' };
+                        visibleColumns.forEach(col => {
+                           if (isPrep && col === 'SDIDATAID') { row[col] = ''; } 
+                           else { const val = getTaskValue(t, col); row[col] = col === 'Due finish' ? formatDate(val) : val; }
                         });
-                    });
+                        internalRows.push(row);
+                     });
                 });
-                person.prepareTasks.forEach((assignment: AssignedPrepareTask) => {
-                    assignment.tasks.forEach((task, idx) => {
-                        if (!isValidTask(task)) return;
-                        flattenedData.push({
-                            'Type': 'Preparation', 'Assigned To': person.testerName, 'Request ID': assignment.requestId.replace('RS1-', ''), 'Sample Name': getTaskValue(task, 'Sample Name'), 'Description': getTaskValue(task, 'Description'), 'Variant': getTaskValue(task, 'Variant'), 'Status': task.preparationStatus || 'Awaiting', 'Due Date': formatDate(getTaskValue(task, 'Due finish')), 'Priority': getTaskValue(task, 'Priority'), 'PoCat': assignment.category === TaskCategory.PoCat ? 'Yes' : 'No'
-                        });
+            });
+
+            // --- SET 2: Customer Import Format ---
+            const customerRows: any[][] = [];
+            customerRows.push(["Count of Variant"]);
+            customerRows.push(["SDIDATAID", "Assign Analyst", "Assign Start date"]);
+
+            // Helper for Customer Date Format DD/MM/YYYY
+            const formatCustomerDate = (dateVal: string) => {
+                 if (!dateVal) return '';
+                 // Handle standard YYYY-MM-DD string from date input to avoid timezone shifts
+                 if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+                     const [year, month, day] = dateVal.split('-');
+                     return `${day}/${month}/${year}`;
+                 }
+                 // Fallback
+                 const d = new Date(dateVal);
+                 if (isNaN(d.getTime())) return '';
+                 return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            };
+
+            detailedData.forEach(person => {
+                const allAssignments = [...person.testingTasks, ...person.prepareTasks];
+                allAssignments.forEach(assignment => {
+                    const isPrep = assignment.hasOwnProperty('assistantId');
+                    assignment.tasks.forEach(t => {
+                         if (!isValidTask(t)) return;
+                         let sdiDataId = '';
+                         if (!isPrep) { sdiDataId = String(getTaskValue(t, 'SDIDATAID') || ''); }
+                         const assignAnalyst = person.testerName;
+                         const assignStartDate = formatCustomerDate(assignment.assignedDate); 
+                         customerRows.push([sdiDataId, assignAnalyst, assignStartDate]);
                     });
                 });
             });
+
             const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(flattenedData);
-            XLSX.utils.book_append_sheet(wb, ws, "Schedule Export");
+            const ws1 = XLSX.utils.json_to_sheet(internalRows);
+            XLSX.utils.book_append_sheet(wb, ws1, "Internal_View");
+            const ws2 = XLSX.utils.aoa_to_sheet(customerRows);
+            XLSX.utils.book_append_sheet(wb, ws2, "Customer_System");
             XLSX.writeFile(wb, `Schedule_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-        } catch (e) { console.error("Export failed", e); alert("Failed to export data. Please try again."); }
+        } catch (e) {
+            console.error("Export failed", e);
+            alert("Failed to export Excel");
+        }
     };
 
-    const toggleColumn = (col: string) => setVisibleColumns(p => { const n = new Set(p); n.has(col) ? n.delete(col) : n.add(col); return n; });
-
     return (
-        <div className="flex flex-col h-[calc(100vh-170px)] animate-slide-in-up">
+        <div className="flex flex-col h-[calc(100vh-140px)] animate-slide-in-up">
+            <div className="flex-shrink-0 mb-4 space-y-4">
+                <div className="flex justify-between items-end">
+                    <div>
+                        <h2 className="text-2xl font-bold text-base-900 dark:text-base-100">Track Schedule</h2>
+                        <p className="text-sm text-base-500">Monitor assignments, status, and reporting</p>
+                    </div>
+                    <button onClick={exportToExcel} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all flex items-center gap-2">
+                        <span>Export Excel</span>
+                    </button>
+                </div>
+
+                <div className="bg-white dark:bg-base-800 p-4 rounded-2xl border border-base-200 dark:border-base-700 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-1">
+                        <label className="text-xs font-bold text-base-400 uppercase ml-1">Date Range</label>
+                        <div className="flex gap-2 mt-1">
+                            <input type="date" value={filters.startDate} onChange={e => setFilters({ ...filters, startDate: e.target.value })} className="w-full p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all" />
+                            <input type="date" value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} className="w-full p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-base-400 uppercase ml-1">Filter by Person</label>
+                        <select value={filters.testerId} onChange={e => setFilters({ ...filters, testerId: e.target.value })} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all">
+                            <option value="all">All Personnel</option>
+                            {testers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-base-400 uppercase ml-1">Shift</label>
+                        <select value={filters.shift} onChange={e => setFilters({ ...filters, shift: e.target.value })} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all">
+                            <option value="all">All Shifts</option>
+                            <option value="day">Day Shift</option>
+                            <option value="night">Night Shift</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center px-1">
+                    <div className="flex p-1 bg-base-100 dark:bg-base-800 rounded-xl border border-base-200 dark:border-base-700">
+                        <button onClick={() => setViewMode('summary')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'summary' ? 'bg-white dark:bg-base-700 text-base-800 dark:text-base-100 shadow-sm' : 'text-base-500 hover:text-base-700'}`}>Summary View</button>
+                        <button onClick={() => setViewMode('detailed')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'detailed' ? 'bg-white dark:bg-base-700 text-base-800 dark:text-base-100 shadow-sm' : 'text-base-500 hover:text-base-700'}`}>Detailed List</button>
+                    </div>
+
+                    {viewMode === 'detailed' && (
+                        <div className="relative" ref={colSelectorRef}>
+                            <button onClick={() => setIsColSelectorOpen(!isColSelectorOpen)} className="px-4 py-2 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-xl text-sm font-bold text-base-600 dark:text-base-300 shadow-sm hover:bg-base-50 transition-all flex items-center gap-2">
+                                <span>Columns</span> <ChevronDownIcon className={`h-4 w-4 transition-transform ${isColSelectorOpen ? 'rotate-180' : ''}`}/>
+                            </button>
+                            {isColSelectorOpen && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-xl shadow-xl z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in">
+                                    {ALL_COLUMNS.map(col => (
+                                        <label key={col} className="flex items-center gap-3 p-2 hover:bg-base-50 dark:hover:bg-base-700 rounded-lg cursor-pointer">
+                                            <input type="checkbox" checked={visibleColumns.has(col)} onChange={e => { const newSet = new Set(visibleColumns); if (e.target.checked) newSet.add(col); else newSet.delete(col); setVisibleColumns(newSet); }} className="rounded text-primary-600 focus:ring-primary-500" />
+                                            <span className="text-sm font-medium text-base-700 dark:text-base-300">{col}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="flex-grow min-h-0 overflow-y-auto custom-scrollbar rounded-2xl border border-base-200 dark:border-base-700 bg-white dark:bg-base-800 p-4">
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center h-full text-base-400 gap-4">
+                        <div className="animate-spin w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full"></div>
+                        <p className="font-medium">Loading schedule data...</p>
+                    </div>
+                ) : error ? (
+                    <div className="flex items-center justify-center h-full text-red-500 font-bold">{error}</div>
+                ) : viewMode === 'summary' ? (
+                    <SummaryView data={summaryData} />
+                ) : (
+                    <DetailedView 
+                        data={detailedData} 
+                        onStatusChange={handleStatusChange} 
+                        onReturn={handleReturnTask} 
+                        onPlannerUnassign={handlePlannerUnassign}
+                        onMarkPrepared={handleMarkItemAsPrepared}
+                        visibleColumns={visibleColumns} 
+                    />
+                )}
+            </div>
+            
             <ReasonPromptModal prompt={reasonPrompt} onClose={() => setReasonPrompt(null)} onSubmit={handleReasonSubmit} />
-            <div className="flex-shrink-0 mb-6 space-y-4">
-                <div className="flex justify-between items-center"><div><h2 className="text-2xl font-bold text-base-900">Track Schedule</h2><p className="text-sm text-base-500">Monitor progress</p></div><div className="flex p-1 bg-base-100 rounded-xl border border-base-200"><button onClick={() => setViewMode('summary')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${viewMode === 'summary' ? 'bg-white shadow-sm text-primary-600' : 'text-base-500 hover:text-base-800'}`}>Summary</button><button onClick={() => setViewMode('detailed')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${viewMode === 'detailed' ? 'bg-white shadow-sm text-primary-600' : 'text-base-500 hover:text-base-800'}`}>Detailed</button></div></div>
-                <div className="p-5 bg-white rounded-2xl border border-base-200 shadow-sm grid grid-cols-1 lg:grid-cols-5 gap-4 items-end">
-                     <div className="lg:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div><label className="text-xs font-bold text-base-400 uppercase">Start Date</label><input type="date" value={filters.startDate} onChange={e => setFilters(f => ({ ...f, startDate: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"/></div>
-                        <div><label className="text-xs font-bold text-base-400 uppercase">End Date</label><input type="date" value={filters.endDate} onChange={e => setFilters(f => ({ ...f, endDate: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"/></div>
-                        <div><label className="text-xs font-bold text-base-400 uppercase">Personnel</label><select value={filters.testerId} onChange={e => setFilters(f => ({ ...f, testerId: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"><option value="all">All Personnel</option>{testers.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-                        <div><label className="text-xs font-bold text-base-400 uppercase">Shift</label><select value={filters.shift} onChange={e => setFilters(f => ({ ...f, shift: e.target.value }))} className="w-full mt-1 p-2 rounded-xl bg-base-50 border-transparent focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"><option value="all">All Shifts</option><option value="day">Day</option><option value="night">Night</option></select></div>
-                     </div>
-                     <div className="relative" ref={colSelectorRef}><button onClick={() => setIsColSelectorOpen(!isColSelectorOpen)} className="w-full h-[42px] bg-base-100 hover:bg-base-200 text-base-700 font-bold rounded-xl border border-base-200 transition-colors flex items-center justify-between px-4 text-sm"><span>Columns ({visibleColumns.size})</span><ChevronDownIcon className="h-4 w-4"/></button>{isColSelectorOpen && (<div className="absolute bottom-full left-0 w-56 mb-2 bg-white rounded-xl shadow-xl border border-base-200 z-50 p-2 overflow-hidden animate-fade-in"><div className="text-xs font-bold text-base-400 uppercase px-2 py-1 mb-1">Visible Columns</div>{ALL_COLUMNS.map(col => (<label key={col} className="flex items-center gap-2 p-2 hover:bg-base-50 rounded-lg cursor-pointer transition-colors"><input type="checkbox" checked={visibleColumns.has(col)} onChange={() => toggleColumn(col)} className="rounded text-primary-600 focus:ring-primary-500"/><span className="text-sm text-base-700">{col}</span></label>))}</div>)}</div>
-                </div>
-                <div className="flex justify-end">
-                     <button onClick={exportToExcel} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95 flex items-center gap-2"><span>Export Excel</span></button>
-                </div>
-            </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                 {isLoading ? <div className="p-12 text-center text-base-400 font-medium">Loading schedule...</div> : detailedData.length > 0 || summaryData.length > 0 ? (viewMode === 'summary' ? <SummaryView data={summaryData} /> : <DetailedView data={detailedData} onStatusChange={handleStatusChange} onReturn={handleReturnTask} onPlannerUnassign={handlePlannerUnassign} onMarkPrepared={handleMarkItemAsPrepared} visibleColumns={visibleColumns} />) : <div className="p-12 text-center text-base-400 font-medium">No schedule data found for today.</div>}
-            </div>
         </div>
     );
 };
