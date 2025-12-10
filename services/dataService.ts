@@ -120,6 +120,10 @@ export const getAssignedPrepareTasks = async (): Promise<AssignedPrepareTask[]> 
     return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }) as AssignedPrepareTask);
 };
 
+export const updateAssignedPrepareTask = async (id: string, updates: Partial<AssignedPrepareTask>): Promise<void> => {
+    await getCollection('assignedPrepareTasks').doc(id).update(updates);
+};
+
 export const assignItemsToPrepare = async (
     originalTask: CategorizedTask,
     indicesToAssign: number[],

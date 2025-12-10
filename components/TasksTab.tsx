@@ -16,6 +16,52 @@ import { CheckCircleIcon, ChevronDownIcon, TrashIcon, AlertTriangleIcon } from '
 
 declare const XLSX: any;
 
+// --- HEADER THEMES ---
+const HEADER_THEMES = [
+    { 
+        name: 'Indigo',
+        headerBg: 'bg-indigo-100 dark:bg-indigo-900/60', 
+        headerText: 'text-indigo-900 dark:text-indigo-100', 
+        borderColor: 'border-indigo-300 dark:border-indigo-600',
+        subHeaderBg: 'bg-indigo-50/50 dark:bg-indigo-900/20'
+    },
+    { 
+        name: 'Emerald',
+        headerBg: 'bg-emerald-100 dark:bg-emerald-900/60', 
+        headerText: 'text-emerald-900 dark:text-emerald-100', 
+        borderColor: 'border-emerald-300 dark:border-emerald-600',
+        subHeaderBg: 'bg-emerald-50/50 dark:bg-emerald-900/20'
+    },
+    { 
+        name: 'Amber',
+        headerBg: 'bg-amber-100 dark:bg-amber-900/60', 
+        headerText: 'text-amber-900 dark:text-amber-100', 
+        borderColor: 'border-amber-300 dark:border-amber-600',
+        subHeaderBg: 'bg-amber-50/50 dark:bg-amber-900/20'
+    },
+    { 
+        name: 'Rose',
+        headerBg: 'bg-rose-100 dark:bg-rose-900/60', 
+        headerText: 'text-rose-900 dark:text-rose-100', 
+        borderColor: 'border-rose-300 dark:border-rose-600',
+        subHeaderBg: 'bg-rose-50/50 dark:bg-rose-900/20'
+    },
+    { 
+        name: 'Cyan',
+        headerBg: 'bg-cyan-100 dark:bg-cyan-900/60', 
+        headerText: 'text-cyan-900 dark:text-cyan-100', 
+        borderColor: 'border-cyan-300 dark:border-cyan-600',
+        subHeaderBg: 'bg-cyan-50/50 dark:bg-cyan-900/20'
+    },
+    { 
+        name: 'Violet',
+        headerBg: 'bg-violet-100 dark:bg-violet-900/60', 
+        headerText: 'text-violet-900 dark:text-violet-100', 
+        borderColor: 'border-violet-300 dark:border-violet-600',
+        subHeaderBg: 'bg-violet-50/50 dark:bg-violet-900/20'
+    },
+];
+
 // --- HELPER COMPONENTS ---
 
 const Toast: React.FC<{ message: string; isError?: boolean; onDismiss: () => void }> = ({ message, isError, onDismiss }) => {
@@ -640,7 +686,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
     };
     
     const ExpandableCell: React.FC<{ headerKey: string; items: { task: RawTask; originalIndex: number; sourceDocId: string }[]; isGroupEnd?: boolean }> = ({ headerKey, items, isGroupEnd }) => {
-        if (!items || items.length === 0) return <td className={`p-0 align-top ${isGroupEnd ? 'border-r-2 border-base-300 dark:border-base-600' : 'border-r dark:border-base-700'}`}></td>;
+        if (!items || items.length === 0) return <td className={`p-0 align-top border border-base-400 dark:border-base-500 ${isGroupEnd ? 'border-r-2 border-r-base-500 dark:border-r-base-500' : ''}`}></td>;
 
         const primaryDocId = items[0].sourceDocId; 
         const isExpanded = expandedCell?.docId === primaryDocId && expandedCell?.headerKey === headerKey;
@@ -665,7 +711,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         };
 
         return (
-            <td className={`p-0 align-top transition-all relative ${isGroupEnd ? 'border-r-2 border-base-300 dark:border-base-600' : 'border-r dark:border-base-700'} ${isExpanded ? 'bg-white dark:bg-base-800 ring-2 ring-primary-500 shadow-lg z-20 rounded-sm' : 'hover:bg-base-50 dark:hover:bg-base-700'}`}>
+            <td className={`p-0 align-top transition-all relative border border-base-400 dark:border-base-500 ${isGroupEnd ? 'border-r-2 border-r-base-500 dark:border-r-base-500' : ''} ${isExpanded ? 'bg-white dark:bg-base-800 ring-2 ring-primary-500 shadow-lg z-20 rounded-sm' : 'hover:bg-base-50 dark:hover:bg-base-700'}`}>
                 <div className="p-1.5 text-center cursor-pointer h-full flex flex-col justify-center min-h-[38px]" onClick={() => setExpandedCell(isExpanded ? null : { docId: primaryDocId, headerKey })}>
                     <div className="flex items-center justify-center gap-1">
                         <span className={`font-bold text-sm ${numSelected > 0 ? 'text-primary-600 dark:text-primary-400' : 'text-base-700 dark:text-base-300'}`}>{numSelected > 0 ? numSelected : items.length}</span>
@@ -679,9 +725,9 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                 </div>
                 
                 {isExpanded && (
-                    <div className="absolute top-full left-0 min-w-[300px] w-max max-w-[400px] bg-white dark:bg-base-800 border dark:border-base-600 shadow-2xl rounded-b-xl overflow-hidden z-50 animate-fade-in origin-top-left">
-                        <div className="p-2 bg-base-50 dark:bg-base-700 border-b dark:border-base-600 flex justify-between items-center">
-                            <span className="text-xs font-bold text-base-500 uppercase tracking-wider">Items</span>
+                    <div className="absolute top-full left-0 min-w-[300px] w-max max-w-[400px] bg-white dark:bg-base-800 border-2 dark:border-base-500 shadow-2xl rounded-b-xl overflow-hidden z-50 animate-fade-in origin-top-left">
+                        <div className="p-2 bg-base-100 dark:bg-base-700 border-b dark:border-base-600 flex justify-between items-center">
+                            <span className="text-xs font-bold text-base-600 uppercase tracking-wider">Items</span>
                             <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                                 <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={areAllSelected} onChange={e => toggleAll(e.target.checked)}/>
                                 Select All
@@ -689,7 +735,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                         </div>
                         <div className="max-h-60 overflow-y-auto custom-scrollbar">
                             <table className="w-full text-xs text-left">
-                                <tbody className="divide-y divide-base-100 dark:divide-base-700">
+                                <tbody className="divide-y divide-base-200 dark:divide-base-700">
                                     {items.map(({ task, originalIndex, sourceDocId }, idx) => {
                                         const isSelected = selectedItems[sourceDocId]?.has(originalIndex) || false;
                                         const isReturned = task.isReturned;
@@ -697,7 +743,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                                         
                                         return (
                                             <tr key={`${sourceDocId}-${originalIndex}`} className={`hover:bg-base-50 dark:hover:bg-base-700/50 transition-colors ${isReturned ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                                                <td className="p-3 w-8 text-center">
+                                                <td className="p-3 w-8 text-center border-b border-base-100 dark:border-base-700">
                                                     <input 
                                                         type="checkbox" 
                                                         className="rounded text-primary-600 focus:ring-primary-500 cursor-pointer" 
@@ -705,25 +751,38 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                                                         onChange={e => handleSelectItem(sourceDocId, originalIndex, e.target.checked)}
                                                     />
                                                 </td>
-                                                <td className="p-3">
+                                                <td className="p-3 border-b border-base-100 dark:border-base-700">
                                                     <div className="font-medium text-base-800 dark:text-base-200">{getTaskValue(task, 'Sample Name')}</div>
                                                     <div className="text-base-400 mt-0.5">{getTaskValue(task, 'Variant')}</div>
-                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                    
+                                                    {/* Status Badges Area */}
+                                                    <div className="flex flex-col gap-1.5 mt-2">
                                                         {isReturned && (
-                                                            <div className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 flex items-center gap-1 w-fit" title={task.returnReason || ''}>
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Returned: {task.returnedBy || 'Unknown'}
+                                                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-md p-1.5">
+                                                                <div className="flex items-center gap-1.5 text-[10px] text-red-700 dark:text-red-300 font-bold uppercase tracking-wide mb-0.5">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> 
+                                                                    Returned by {task.returnedBy || 'Unknown'}
+                                                                </div>
+                                                                {task.returnReason && (
+                                                                    <div className="text-xs text-red-800 dark:text-red-200 italic pl-3 border-l-2 border-red-200 dark:border-red-700">
+                                                                        "{task.returnReason}"
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
-                                                        {prepStatus === 'Awaiting Preparation' && (
-                                                            <div className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1 w-fit">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Preparing
-                                                            </div>
-                                                        )}
-                                                        {(prepStatus === 'Prepared' || prepStatus === 'Ready for Testing') && (
-                                                            <div className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1 w-fit">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Ready
-                                                            </div>
-                                                        )}
+                                                        
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {prepStatus === 'Awaiting Preparation' && (
+                                                                <div className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1 w-fit">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Preparing
+                                                                </div>
+                                                            )}
+                                                            {(prepStatus === 'Prepared' || prepStatus === 'Ready for Testing') && (
+                                                                <div className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1 w-fit">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Ready
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -843,7 +902,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
             </div>
 
             {/* CONTENT AREA */}
-            <div className="flex-grow min-h-0 overflow-hidden border border-base-200 dark:border-base-700 rounded-2xl bg-white dark:bg-base-800 shadow-sm relative flex flex-col">
+            <div className="flex-grow min-h-0 overflow-hidden border border-base-500 dark:border-base-600 rounded-2xl bg-white dark:bg-base-800 shadow-sm relative flex flex-col">
                 {isLoading ? (<div className="flex flex-col items-center justify-center h-full text-base-400 gap-3"><div className="animate-spin h-8 w-8 border-4 border-primary-200 border-t-primary-600 rounded-full"></div>Loading tasks...</div>) :
                  error ? (<div className="flex items-center justify-center h-full text-red-500 font-medium">{error}</div>) : 
                  
@@ -872,7 +931,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
 
                         <div className="overflow-y-auto flex-grow custom-scrollbar min-h-0">
                             <table className="min-w-full text-sm text-left">
-                                <thead className="bg-base-50 dark:bg-base-800 text-base-500 sticky top-0 z-10">
+                                <thead className="bg-base-5 dark:bg-base-800 text-base-500 sticky top-0 z-10">
                                     <tr>
                                         <th className="p-4 w-12 text-center">Select</th>
                                         <th className="p-4">Description</th>
@@ -912,23 +971,36 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                     gridData.length === 0 ? (<div className="flex items-center justify-center h-full text-base-400 italic">No tasks match the current filters.</div>) : (
                     <div className="flex-grow overflow-auto min-h-0 custom-scrollbar relative">
                         <table className="min-w-full text-sm text-left border-collapse relative">
-                            <thead className="bg-white/90 dark:bg-base-800/90 backdrop-blur-md sticky top-0 z-40 shadow-sm">
+                            <thead className="sticky top-0 z-40 shadow-md">
                                 <tr>
-                                    <th rowSpan={2} className="p-2 font-bold border-b border-r border-base-200 dark:border-base-700 w-52 sticky left-0 z-50 bg-white/95 dark:bg-base-800/95 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] text-base-700 dark:text-base-200">
-                                        Request ID
+                                    <th rowSpan={2} className="p-3 font-extrabold border-b-2 border-r-2 border-base-300 dark:border-base-600 w-52 sticky left-0 z-50 bg-white/95 dark:bg-base-800/95 backdrop-blur-md text-base-800 dark:text-base-100 text-left shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                                        <div className="flex flex-col">
+                                            <span>Request ID</span>
+                                            <span className="text-[10px] font-normal text-base-400">Sort by Due Date</span>
+                                        </div>
                                     </th>
-                                    {activeGridHeaders.map(([group, subKeys]) => (
-                                        <th key={group} colSpan={subKeys.length} className="p-2 font-bold text-center border-b border-r-2 border-base-300 dark:border-base-600 text-primary-700 dark:text-primary-400 uppercase tracking-wide text-xs">
-                                            {group}
-                                        </th>
-                                    ))}
-                                    <th rowSpan={2} className="p-2 font-bold border-b border-base-200 dark:border-base-700 w-40 text-center text-base-500">Unmapped</th>
+                                    {activeGridHeaders.map(([group, subKeys], index) => {
+                                        const theme = HEADER_THEMES[index % HEADER_THEMES.length];
+                                        return (
+                                            <th key={group} colSpan={subKeys.length} className={`p-2 font-bold text-center border-b border-r-2 ${theme.headerBg} ${theme.headerText} ${theme.borderColor} uppercase tracking-wider text-xs`}>
+                                                {group}
+                                            </th>
+                                        );
+                                    })}
+                                    <th rowSpan={2} className="p-2 font-bold border-b-2 border-l-2 border-base-300 dark:border-base-600 w-40 text-center bg-base-100 dark:bg-base-800 text-base-500">Unmapped</th>
                                 </tr>
                                 <tr>
-                                    {activeColumnKeys.map(key => {
-                                        const display = key.split('|')[1];
-                                        const isGroupEnd = lastKeysOfGroups.has(key);
-                                        return <th key={key} className={`p-2 font-semibold text-center border-b ${isGroupEnd ? 'border-r-2 border-base-300 dark:border-base-600' : 'border-r border-base-200 dark:border-base-700'} w-32 text-xs text-base-500 truncate`}>{display}</th>
+                                    {activeGridHeaders.map(([group, subKeys], index) => {
+                                        const theme = HEADER_THEMES[index % HEADER_THEMES.length];
+                                        return subKeys.map((key, subIndex) => {
+                                            const display = key.split('|')[1];
+                                            const isLast = subIndex === subKeys.length - 1;
+                                            return (
+                                                <th key={key} className={`p-2 font-semibold text-center border-b-2 border-base-200 dark:border-base-700 ${theme.subHeaderBg} text-base-700 dark:text-base-300 w-32 text-xs truncate ${isLast ? 'border-r-2 border-r-' + theme.borderColor.split(' ')[0].replace('border-', '') : 'border-r'}`}>
+                                                    {display}
+                                                </th>
+                                            )
+                                        });
                                     })}
                                 </tr>
                             </thead>
@@ -963,8 +1035,8 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                                     const rowClass = idx % 2 === 0 ? 'bg-white dark:bg-base-800' : 'bg-base-50/50 dark:bg-base-800/50';
 
                                     return (
-                                        <tr key={row.requestId} className={`border-b border-base-100 dark:border-base-700 last:border-b-0 hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors group ${rowClass}`}>
-                                            <td className={`p-1 border-r border-base-200 dark:border-base-700 sticky left-0 z-30 ${rowClass} group-hover:bg-primary-50/30 dark:group-hover:bg-primary-900/10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] align-top w-52`}>
+                                        <tr key={row.requestId} className={`border border-base-400 dark:border-base-500 last:border-b-0 hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors group ${rowClass}`}>
+                                            <td className={`p-1 border border-base-400 dark:border-base-500 sticky left-0 z-30 ${rowClass} group-hover:bg-primary-50/30 dark:group-hover:bg-primary-900/10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] align-top w-52`}>
                                                 <div className="flex flex-col justify-center h-full relative pl-3 py-1">
                                                     {/* Status Line Indicator */}
                                                     <div className={`absolute left-0 top-1 bottom-1 w-1 rounded-full ${isUrgent || isSprint ? 'bg-status-urgent' : isLSP ? 'bg-status-lsp' : isPoCat ? 'bg-status-pocat' : 'bg-status-normal'}`}></div>

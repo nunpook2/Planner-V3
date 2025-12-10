@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Tester, AssignedTask, RawTask, CategorizedTask, AssignedPrepareTask } from '../types';
 import { TaskStatus, TaskCategory } from '../types';
-import { getAssignedTasks, updateAssignedTask, deleteAssignedTask, returnTaskToPool, getAssignedPrepareTasks, markItemAsPrepared, getCategorizedTasks, unassignTaskToPool } from '../services/dataService';
+import { getAssignedTasks, updateAssignedTask, deleteAssignedTask, returnTaskToPool, getAssignedPrepareTasks, updateAssignedPrepareTask, markItemAsPrepared, getCategorizedTasks, unassignTaskToPool } from '../services/dataService';
 import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, ChevronDownIcon, RefreshIcon } from './common/Icons';
 
 declare const XLSX: any;
@@ -13,8 +13,23 @@ interface ScheduleTabProps {
 }
 
 const ALL_COLUMNS = [
-    'Request ID', 'Sample Name', 'Description', 'Variant', 'Due finish', 'Priority', 'Purpose', 'Testing Condition', 'Note to planer', 'SDIDATAID'
+    'Request ID', 'Sample Name', 'Description', 'Variant', 'Due finish', 'Priority', 'Purpose', 'Testing Condition', 'Note to planer', 'Planner Note', 'SDIDATAID'
 ];
+
+// Fixed column widths to ensure alignment across different tables
+const COLUMN_WIDTHS: Record<string, string> = {
+    'Request ID': '120px',
+    'Sample Name': '180px',
+    'Description': '350px', 
+    'Variant': '130px',
+    'Due finish': '110px',
+    'Priority': '100px',
+    'Purpose': '120px',
+    'Testing Condition': '150px',
+    'Note to planer': '200px',
+    'Planner Note': '200px',
+    'SDIDATAID': '120px',
+};
 
 const formatDate = (dateString: string | number) => {
     if (!dateString) return '';
@@ -148,8 +163,12 @@ const DetailedView: React.FC<{
     onReturn: (docId: string, index: number) => void;
     onPlannerUnassign: (docId: string, index: number) => void;
     onMarkPrepared: (prepTask: AssignedPrepareTask, itemIndex: number) => void;
+    onNoteChange: (docId: string, index: number, note: string) => void;
     visibleColumns: Set<string>;
-}> = ({ data, onStatusChange, onReturn, onPlannerUnassign, onMarkPrepared, visibleColumns }) => {
+    expandedSections: Set<string>;
+    toggleSection: (name: string) => void;
+}> = ({ data, onStatusChange, onReturn, onPlannerUnassign, onMarkPrepared, onNoteChange, visibleColumns, expandedSections, toggleSection }) => {
+    
     const renderCombinedTable = (assignments: (AssignedTask | AssignedPrepareTask)[], type: 'testing' | 'prepare') => {
         const isPrep = type === 'prepare';
         const allItemsRaw = assignments.flatMap(assignment => assignment.tasks.map((task, index) => ({ task, originalIndex: index, parentDocId: assignment.id, parentAssignment: assignment, requestId: assignment.requestId })));
@@ -169,38 +188,130 @@ const DetailedView: React.FC<{
         if (allItems.length === 0) return null;
         const activeCols = ALL_COLUMNS.filter(col => visibleColumns.has(col));
 
+        // GROUPING LOGIC
+        const groupedItems: Record<string, typeof allItems> = {};
+        allItems.forEach(item => {
+            const rid = item.requestId || 'Unknown';
+            if (!groupedItems[rid]) groupedItems[rid] = [];
+            groupedItems[rid].push(item);
+        });
+
+        // Helper for colors
+        const getGroupColor = (str: string) => {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            const h = Math.abs(hash % 360);
+            return {
+                bg: `hsl(${h}, 70%, 98%)`,
+                border: `hsl(${h}, 60%, 50%)`,
+                text: `hsl(${h}, 60%, 30%)`
+            };
+        };
+
         return (
             <div className="overflow-x-auto custom-scrollbar border border-base-200 rounded-lg">
-                <table className="min-w-full text-left table-fixed">
-                    <thead className="bg-base-50 sticky top-0 z-10">
+                <table className="min-w-full text-left table-fixed border-collapse">
+                    <thead className="bg-base-50 sticky top-0 z-10 shadow-sm">
                         <tr>
-                            {!isPrep && <th className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 w-24">Status</th>}
-                            {activeCols.map(h => <th key={h} className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 whitespace-nowrap">{h}</th>)}
-                            <th className="p-2 font-bold uppercase tracking-wider text-xs text-base-500 text-right w-36">Actions</th>
+                            {!isPrep && <th className="p-3 font-bold uppercase tracking-wider text-xs text-base-500 w-24 border-b border-base-200">Status</th>}
+                            {activeCols.map(h => (
+                                <th 
+                                    key={h} 
+                                    className="p-3 font-bold uppercase tracking-wider text-xs text-base-500 whitespace-nowrap border-b border-base-200" 
+                                    style={{ width: COLUMN_WIDTHS[h] || '150px' }}
+                                >
+                                    {h}
+                                </th>
+                            ))}
+                            <th className="p-3 font-bold uppercase tracking-wider text-xs text-base-500 text-right w-44 border-b border-base-200">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-base-100">
-                        {allItems.map(({ task: item, originalIndex, parentDocId, parentAssignment, requestId }, idx) => (
-                            <tr key={`${parentDocId}-${originalIndex}-${idx}`} className="hover:bg-base-50 transition-colors">
-                                {!isPrep && <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${item.status === TaskStatus.Done ? 'bg-emerald-100 text-emerald-700' : item.status === TaskStatus.NotOK ? 'bg-red-100 text-red-700' : 'bg-base-100 text-base-500'}`}>{item.status || 'Pending'}</span></td>}
-                                {activeCols.map(col => (
-                                    <td key={col} className="p-2 text-sm text-base-700 truncate" title={String(getTaskValue(item, col) || '')}>
-                                        {col === 'Request ID' ? <div className="flex items-center gap-1"><span className="font-medium">{requestId.replace('RS1-', '')}</span>{parentAssignment.category === TaskCategory.PoCat && <span className="px-1 py-px rounded text-[9px] font-bold bg-status-pocat text-white uppercase tracking-wider">PoCat</span>}</div> : col === 'Due finish' ? formatDate(getTaskValue(item, col)) : getTaskValue(item, col)}
-                                    </td>
-                                ))}
-                                <td className="p-2 text-right whitespace-nowrap">
-                                    {isPrep ? (item.preparationStatus === 'Prepared' ? <span className="flex items-center justify-end gap-1 text-emerald-600 font-bold text-xs"><CheckCircleIcon className="h-4 w-4"/> Ready</span> : <button onClick={() => onMarkPrepared(parentAssignment as AssignedPrepareTask, originalIndex)} className="px-2 py-1 text-xs font-bold text-white bg-emerald-500 rounded hover:bg-emerald-600 shadow-sm transition-all">Mark Ready</button>) : (
-                                        <div className="flex gap-1 justify-end">
-                                            <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.Done)} className="text-base-300 hover:text-emerald-500 hover:bg-emerald-50 p-1.5 rounded transition-all" title="Mark Done"><CheckCircleIcon className="h-5 w-5"/></button>
-                                            <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.NotOK)} className="text-base-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-all" title="Mark Not OK"><XCircleIcon className="h-5 w-5"/></button>
-                                            <button onClick={() => onReturn(parentDocId, originalIndex)} className="text-base-300 hover:text-orange-500 hover:bg-orange-50 p-1.5 rounded transition-all" title="Return Task (With Reason)"><ArrowUturnLeftIcon className="h-5 w-5"/></button>
-                                            <button onClick={() => onPlannerUnassign(parentDocId, originalIndex)} className="text-base-300 hover:text-blue-500 hover:bg-blue-50 p-1.5 rounded transition-all" title="Re-plan (Unassign without reason)"><RefreshIcon className="h-5 w-5"/></button>
+                    {Object.entries(groupedItems).map(([reqId, groupItems]) => {
+                        const colors = getGroupColor(reqId);
+                        const isPoCat = groupItems[0].parentAssignment.category === TaskCategory.PoCat;
+
+                        return (
+                            <tbody key={reqId} className="relative">
+                                {/* Spacer Row */}
+                                <tr className="h-4 border-none bg-white"><td colSpan={100}></td></tr>
+                                
+                                {/* Group Header */}
+                                <tr style={{ backgroundColor: colors.bg, borderLeft: `4px solid ${colors.border}` }}>
+                                    <td colSpan={100} className="p-2 border-y border-base-200/50">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-sm" style={{ color: colors.text }}>{reqId.replace(/^RS1-/, '')}</span>
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-white/60 text-base-600 font-medium border border-black/5">{groupItems.length} items</span>
+                                            {isPoCat && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-status-pocat text-white uppercase tracking-wider shadow-sm">PoCat</span>}
                                         </div>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                                    </td>
+                                </tr>
+
+                                {/* Items */}
+                                {groupItems.map(({ task: item, originalIndex, parentDocId, parentAssignment, requestId }, idx) => (
+                                    <tr key={`${parentDocId}-${originalIndex}-${idx}`} className="hover:bg-white/50 transition-colors border-b border-base-200/50 last:border-b-0" style={{ backgroundColor: colors.bg, borderLeft: `4px solid ${colors.border}` }}>
+                                        {!isPrep && (
+                                            <td className="p-2">
+                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${item.status === TaskStatus.Done ? 'bg-emerald-100 text-emerald-700' : item.status === TaskStatus.NotOK ? 'bg-red-100 text-red-700' : 'bg-white/50 text-base-600 border border-base-200'}`}>
+                                                    {item.status || 'Pending'}
+                                                </span>
+                                            </td>
+                                        )}
+                                        {activeCols.map(col => (
+                                            <td key={col} className="p-2 text-sm text-base-700 align-top" title={String(getTaskValue(item, col) || '')}>
+                                                {col === 'Request ID' ? (
+                                                    <span className="text-xs text-base-400 font-mono opacity-50">{requestId.replace('RS1-', '')}</span>
+                                                ) : col === 'Due finish' ? (
+                                                    formatDate(getTaskValue(item, col))
+                                                ) : col === 'Description' ? (
+                                                    <span className="block whitespace-normal text-sm leading-snug">{getTaskValue(item, col)}</span>
+                                                ) : col === 'Planner Note' ? (
+                                                     <div className="relative">
+                                                        <input 
+                                                            type="text" 
+                                                            defaultValue={item.plannerNote || ''}
+                                                            onBlur={(e) => onNoteChange(parentDocId, originalIndex, e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    onNoteChange(parentDocId, originalIndex, (e.target as HTMLInputElement).value);
+                                                                    (e.target as HTMLInputElement).blur();
+                                                                }
+                                                            }}
+                                                            placeholder="Note..."
+                                                            className="w-full bg-white/50 border border-base-300/50 rounded px-2 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-400 focus:ring-2 focus:ring-primary-500 outline-none transition-all placeholder:text-base-400"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <span className="truncate block">{getTaskValue(item, col)}</span>
+                                                )}
+                                            </td>
+                                        ))}
+                                        <td className="p-2 text-right whitespace-nowrap align-top">
+                                            {isPrep ? (
+                                                item.preparationStatus === 'Prepared' ? 
+                                                <span className="flex items-center justify-end gap-1 text-emerald-600 font-bold text-xs"><CheckCircleIcon className="h-4 w-4"/> Ready</span> : 
+                                                <button onClick={() => onMarkPrepared(parentAssignment as AssignedPrepareTask, originalIndex)} className="px-2 py-1 text-xs font-bold text-white bg-emerald-500 rounded hover:bg-emerald-600 shadow-sm transition-all">Mark Ready</button>
+                                            ) : (
+                                                <div className="flex gap-2 justify-end opacity-100 transition-opacity duration-200">
+                                                    <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.Done)} className="flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Mark Done">
+                                                        <CheckCircleIcon className="h-3.5 w-3.5"/> Done
+                                                    </button>
+                                                    <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.NotOK)} className="flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Mark Not OK">
+                                                        <XCircleIcon className="h-3.5 w-3.5"/> Fail
+                                                    </button>
+                                                    <button onClick={() => onReturn(parentDocId, originalIndex)} className="flex items-center gap-1 bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Return Task">
+                                                        <ArrowUturnLeftIcon className="h-3.5 w-3.5"/>
+                                                    </button>
+                                                    <button onClick={() => onPlannerUnassign(parentDocId, originalIndex)} className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Re-plan">
+                                                        <RefreshIcon className="h-3.5 w-3.5"/>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        );
+                    })}
                 </table>
             </div>
         );
@@ -208,17 +319,30 @@ const DetailedView: React.FC<{
 
     return (
         <div className="space-y-6 pb-8">
-            {data.map(({ testerName, testingTasks, prepareTasks }) => (
-                <details key={testerName} className="bg-white rounded-2xl shadow-sm border border-base-200 overflow-hidden" open>
-                    <summary className="p-4 cursor-pointer list-none flex justify-between items-center bg-base-50 hover:bg-base-100 transition-colors">
-                        <div className="flex items-center gap-4"><div className="bg-white border border-base-200 p-2 rounded-full text-primary-600 shadow-sm"><ChevronDownIcon className="h-5 w-5 group-open:rotate-180 transition-transform"/></div><h3 className="font-bold text-lg text-base-800">{testerName}</h3></div>
-                    </summary>
-                    <div className="p-4 border-t border-base-200 space-y-6">
-                        {prepareTasks.length > 0 && <div><h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2 bg-amber-50 inline-block px-2 py-0.5 rounded-md border border-amber-100">Preparation Queue</h4>{renderCombinedTable(prepareTasks, 'prepare')}</div>}
-                        {testingTasks.length > 0 && <div><h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-2 bg-indigo-50 inline-block px-2 py-0.5 rounded-md border border-indigo-100">Testing Queue</h4>{renderCombinedTable(testingTasks, 'testing')}</div>}
+            {data.map(({ testerName, testingTasks, prepareTasks }) => {
+                const isOpen = expandedSections.has(testerName);
+                return (
+                    <div key={testerName} className="bg-white rounded-2xl shadow-sm border border-base-200 overflow-hidden">
+                        <div 
+                            onClick={() => toggleSection(testerName)}
+                            className="p-4 cursor-pointer flex justify-between items-center bg-base-50 hover:bg-base-100 transition-colors select-none"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className={`bg-white border border-base-200 p-2 rounded-full text-primary-600 shadow-sm transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                                    <ChevronDownIcon className="h-5 w-5"/>
+                                </div>
+                                <h3 className="font-bold text-lg text-base-800">{testerName}</h3>
+                            </div>
+                        </div>
+                        {isOpen && (
+                            <div className="p-4 border-t border-base-200 space-y-6 animate-fade-in">
+                                {prepareTasks.length > 0 && <div><h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2 bg-amber-50 inline-block px-2 py-0.5 rounded-md border border-amber-100">Preparation Queue</h4>{renderCombinedTable(prepareTasks, 'prepare')}</div>}
+                                {testingTasks.length > 0 && <div><h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-2 bg-indigo-50 inline-block px-2 py-0.5 rounded-md border border-indigo-100">Testing Queue</h4>{renderCombinedTable(testingTasks, 'testing')}</div>}
+                            </div>
+                        )}
                     </div>
-                </details>
-            ))}
+                );
+            })}
         </div>
     );
 };
@@ -232,13 +356,50 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
     const [viewMode, setViewMode] = useState<'summary' | 'detailed'>('summary');
     const [filters, setFilters] = useState({ startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0], testerId: 'all', shift: 'all' });
     const [reasonPrompt, setReasonPrompt] = useState<{ action: 'notOk' | 'return'; docId: string; index: number; taskName: string; } | null>(null);
-    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(['Request ID', 'Sample Name', 'Description', 'Variant']));
+    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(['Sample Name', 'Description', 'Variant', 'Planner Note']));
     const [isColSelectorOpen, setIsColSelectorOpen] = useState(false);
     const colSelectorRef = useRef<HTMLDivElement>(null);
+    
+    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+    const hasInitializedAccordions = useRef(false);
 
     useEffect(() => { const h = (e:MouseEvent) => { if(colSelectorRef.current && !colSelectorRef.current.contains(e.target as Node)) setIsColSelectorOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
-    const fetchTasks = async () => { setIsLoading(true); setError(null); try { const [t, p, c] = await Promise.all([getAssignedTasks(), getAssignedPrepareTasks(), getCategorizedTasks()]); setAssignedTestingTasks(t); setAssignedPrepareTasks(p); setReturnedTasksPool(c); } catch (e) { setError("Failed to load"); } finally { setIsLoading(false); }};
+    
+    // allowBackgroundUpdate flag prevents loading spinner from showing during action updates, preserving UI state (accordions)
+    const fetchTasks = async (allowBackgroundUpdate = false) => { 
+        if (!allowBackgroundUpdate) setIsLoading(true); 
+        setError(null); 
+        try { 
+            const [t, p, c] = await Promise.all([getAssignedTasks(), getAssignedPrepareTasks(), getCategorizedTasks()]); 
+            setAssignedTestingTasks(t); 
+            setAssignedPrepareTasks(p); 
+            setReturnedTasksPool(c); 
+            
+            // Only initialize accordions once when data is first loaded and there is data
+            if (!hasInitializedAccordions.current && (t.length > 0 || p.length > 0)) {
+                 const names = new Set<string>();
+                 t.forEach(task => task.testerName && names.add(task.testerName));
+                 p.forEach(task => task.assistantName && names.add(task.assistantName));
+                 setExpandedSections(names);
+                 hasInitializedAccordions.current = true;
+            }
+        } catch (e) { 
+            setError("Failed to load"); 
+        } finally { 
+            if (!allowBackgroundUpdate) setIsLoading(false); 
+        }
+    };
+    
     useEffect(() => { fetchTasks(); }, []);
+
+    const toggleSection = (name: string) => {
+        setExpandedSections(prev => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name);
+            else next.add(name);
+            return next;
+        });
+    };
 
     const { filteredTestingTasks, filteredPrepareTasks, filteredReturnedTasks } = useMemo(() => {
         const startDate = new Date(filters.startDate); const endDate = new Date(filters.endDate); endDate.setHours(23, 59, 59, 999);
@@ -295,7 +456,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
         return Array.from(personMap.values()).sort((a: any, b: any) => a.testerName.localeCompare(b.testerName));
     }, [filteredTestingTasks, filteredPrepareTasks]);
 
-    const handleStatusChange = (docId: string, index: number, status: TaskStatus) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (!task) return; if (status === TaskStatus.NotOK) setReasonPrompt({ action: 'notOk', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); else { const original = assignedTestingTasks.find(t => t.id === docId); if (original) { const up = [...original.tasks]; up[index] = { ...up[index], status, notOkReason: null }; updateAssignedTask(docId, { tasks: up }).then(fetchTasks); } } };
+    const handleStatusChange = (docId: string, index: number, status: TaskStatus) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (!task) return; if (status === TaskStatus.NotOK) setReasonPrompt({ action: 'notOk', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); else { const original = assignedTestingTasks.find(t => t.id === docId); if (original) { const up = [...original.tasks]; up[index] = { ...up[index], status, notOkReason: null }; updateAssignedTask(docId, { tasks: up }).then(() => fetchTasks(true)); } } };
     const handleReturnTask = (docId: string, index: number) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (task) setReasonPrompt({ action: 'return', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); };
     
     const handlePlannerUnassign = async (docId: string, index: number) => {
@@ -317,10 +478,36 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
             else await updateAssignedTask(docId, { tasks: rem });
             
             onTasksUpdated();
-            await fetchTasks();
+            await fetchTasks(true);
         } catch (e) {
             console.error(e);
             alert("Failed to unassign task");
+        }
+    };
+
+    const handleNoteChange = async (docId: string, index: number, note: string) => {
+        // Optimistic update
+        let found = false;
+        
+        // Try testing tasks
+        const testingTask = assignedTestingTasks.find(t => t.id === docId);
+        if (testingTask) {
+             const newTasks = [...testingTask.tasks];
+             newTasks[index] = { ...newTasks[index], plannerNote: note };
+             setAssignedTestingTasks(prev => prev.map(t => t.id === docId ? { ...t, tasks: newTasks } : t));
+             await updateAssignedTask(docId, { tasks: newTasks });
+             found = true;
+        }
+
+        if (!found) {
+            // Try prepare tasks
+            const prepareTask = assignedPrepareTasks.find(t => t.id === docId);
+            if (prepareTask) {
+                 const newTasks = [...prepareTask.tasks];
+                 newTasks[index] = { ...newTasks[index], plannerNote: note };
+                 setAssignedPrepareTasks(prev => prev.map(t => t.id === docId ? { ...t, tasks: newTasks } : t));
+                 await updateAssignedPrepareTask(docId, { tasks: newTasks });
+            }
         }
     };
 
@@ -357,11 +544,11 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
         } catch (e) { 
             console.error(e); 
         } finally { 
-            await fetchTasks(); 
+            await fetchTasks(true); 
         } 
     };
     
-    const handleMarkItemAsPrepared = async (prepTask: AssignedPrepareTask, itemIndex: number) => { await markItemAsPrepared(prepTask, itemIndex); await fetchTasks(); onTasksUpdated(); };
+    const handleMarkItemAsPrepared = async (prepTask: AssignedPrepareTask, itemIndex: number) => { await markItemAsPrepared(prepTask, itemIndex); await fetchTasks(true); onTasksUpdated(); };
     
     const exportToExcel = () => {
         try {
@@ -510,7 +697,10 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) =>
                         onReturn={handleReturnTask} 
                         onPlannerUnassign={handlePlannerUnassign}
                         onMarkPrepared={handleMarkItemAsPrepared}
-                        visibleColumns={visibleColumns} 
+                        onNoteChange={handleNoteChange}
+                        visibleColumns={visibleColumns}
+                        expandedSections={expandedSections}
+                        toggleSection={toggleSection}
                     />
                 )}
             </div>

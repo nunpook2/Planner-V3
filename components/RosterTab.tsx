@@ -92,14 +92,18 @@ const AssignedChip: React.FC<{
 }> = ({ tester, onRemove, theme }) => {
     const bgClass = theme === 'amber' ? 'bg-white border-amber-200 text-amber-900' : 'bg-white border-indigo-200 text-indigo-900';
     const iconBg = theme === 'amber' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600';
+    const isAssistant = tester.team === 'assistants_4_2';
     
     return (
-        <div className={`group flex items-center gap-2 pl-1 pr-2 py-1 rounded-full border shadow-sm transition-all hover:shadow-md ${bgClass}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${iconBg}`}>
+        <div className={`group flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-xl border shadow-sm transition-all hover:shadow-md ${bgClass} w-full`}>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${iconBg}`}>
                 {getInitials(tester.name)}
             </div>
-            <span className="text-xs font-semibold">{tester.name}</span>
-            <button onClick={onRemove} className="ml-1 w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-100 text-base-300 hover:text-red-500 transition-colors">
+            <div className="flex-grow min-w-0 flex flex-col leading-none">
+                <span className="text-xs font-bold truncate">{tester.name}</span>
+                <span className="text-[9px] opacity-70 truncate">{isAssistant ? 'Assistant' : 'Tester'}</span>
+            </div>
+            <button onClick={onRemove} className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100 text-base-300 hover:text-red-500 transition-colors">
                 ✕
             </button>
         </div>
@@ -125,7 +129,7 @@ const EmployeeCard: React.FC<{
         `}>
             <div className="flex items-center gap-3">
                 <div className={`
-                    w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-inner
+                    w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-inner
                     ${dayAssigned ? 'bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700' : 
                       nightAssigned ? 'bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700' : 
                       'bg-gradient-to-br from-base-100 to-base-200 dark:from-base-700 dark:to-base-600 text-base-600 dark:text-base-300'}
@@ -134,14 +138,11 @@ const EmployeeCard: React.FC<{
                 </div>
                 
                 <div className="flex-grow min-w-0">
-                    <p className={`font-semibold text-sm truncate ${isFullyAssigned ? 'text-base-400' : 'text-base-800 dark:text-base-100'}`}>
+                    <p className={`font-semibold text-xs truncate ${isFullyAssigned ? 'text-base-400' : 'text-base-800 dark:text-base-100'}`}>
                         {employee.name}
                     </p>
-                    <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-base-400">
-                            {employee.team === 'testers_3_3' ? 'Tester' : 'Assistant'}
-                        </span>
-                        {isAssignedAny && !isFullyAssigned && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-1"></span>}
+                    <div className="flex items-center gap-1 mt-0.5">
+                         {isAssignedAny && !isFullyAssigned && <span className="text-[9px] font-bold text-emerald-500">Assigned</span>}
                     </div>
                 </div>
 
@@ -149,16 +150,16 @@ const EmployeeCard: React.FC<{
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                             onClick={() => onAdd(employee.id, 'day')} 
-                            disabled={dayAssigned || nightAssigned} // Exclusive Logic: Can't assign if already assigned to any shift
-                            className={`p-2 rounded-lg transition-all ${dayAssigned || nightAssigned ? 'hidden' : 'bg-amber-50 text-amber-500 hover:bg-amber-500 hover:text-white shadow-sm'}`} 
+                            disabled={dayAssigned || nightAssigned} 
+                            className={`p-1.5 rounded-lg transition-all ${dayAssigned || nightAssigned ? 'hidden' : 'bg-amber-50 text-amber-500 hover:bg-amber-500 hover:text-white shadow-sm'}`} 
                             title="Assign Day Shift"
                         >
                             <SunIcon className="h-4 w-4" />
                         </button>
                         <button 
                             onClick={() => onAdd(employee.id, 'night')} 
-                            disabled={dayAssigned || nightAssigned} // Exclusive Logic
-                            className={`p-2 rounded-lg transition-all ${dayAssigned || nightAssigned ? 'hidden' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-500 hover:text-white shadow-sm'}`} 
+                            disabled={dayAssigned || nightAssigned}
+                            className={`p-1.5 rounded-lg transition-all ${dayAssigned || nightAssigned ? 'hidden' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-500 hover:text-white shadow-sm'}`} 
                             title="Assign Night Shift"
                         >
                             <MoonIcon className="h-4 w-4" />
@@ -166,7 +167,7 @@ const EmployeeCard: React.FC<{
                     </div>
                 )}
                 
-                {isFullyAssigned && <CheckCircleIcon className="h-5 w-5 text-emerald-500 absolute top-3 right-3" />}
+                {isFullyAssigned && <CheckCircleIcon className="h-4 w-4 text-emerald-500 absolute top-3 right-3" />}
             </div>
         </div>
     );
@@ -186,59 +187,45 @@ const ShiftBoard: React.FC<{
     const textColor = isDay ? 'text-amber-900 dark:text-amber-100' : 'text-indigo-900 dark:text-indigo-100';
     const iconColor = isDay ? 'text-amber-500' : 'text-indigo-500';
 
+    // Combine and Sort Personnel
+    const allPersonnel = useMemo(() => {
+        return [...assignedTesters, ...assignedAssistants].sort((a, b) => {
+            // Sort by Role first (Testers then Assistants), then by Name
+            if (a.team !== b.team) return a.team === 'testers_3_3' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [assignedTesters, assignedAssistants]);
+
     return (
-        <div className={`h-full rounded-3xl border ${borderColor} bg-white dark:bg-base-800 shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md`}>
+        <div className={`h-full rounded-3xl border ${borderColor} bg-white dark:bg-base-800 shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md flex-1`}>
             {/* Header */}
-            <div className={`p-5 border-b ${borderColor} ${headerBg} flex justify-between items-center`}>
-                <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-2xl bg-white dark:bg-base-800 shadow-sm ${iconColor}`}>
-                        {isDay ? <SunIcon className="h-6 w-6" /> : <MoonIcon className="h-6 w-6" />}
+            <div className={`p-4 border-b ${borderColor} ${headerBg} flex flex-col gap-2`}>
+                <div className="flex items-center justify-between">
+                    <div className={`p-2 rounded-xl bg-white dark:bg-base-800 shadow-sm ${iconColor}`}>
+                        {isDay ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
                     </div>
-                    <div>
-                        <h3 className={`font-bold text-lg leading-none ${textColor}`}>{isDay ? 'Day Shift' : 'Night Shift'}</h3>
-                        <p className={`text-xs font-bold uppercase tracking-wider opacity-60 mt-1 ${textColor}`}>{isDay ? '08:00 - 20:00' : '20:00 - 08:00'}</p>
+                    <div className={`px-2 py-1 rounded-lg bg-white/60 dark:bg-black/20 border border-white/50 dark:border-white/5 backdrop-blur-sm`}>
+                        <span className={`text-lg font-black ${iconColor}`}>{allPersonnel.length}</span>
                     </div>
                 </div>
-                <div className={`px-4 py-2 rounded-xl bg-white/60 dark:bg-black/20 border border-white/50 dark:border-white/5 backdrop-blur-sm`}>
-                    <span className={`text-2xl font-black ${iconColor}`}>{assignedTesters.length + assignedAssistants.length}</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-wide block ${textColor} opacity-70`}>Active</span>
+                <div>
+                    <h3 className={`font-bold text-base leading-none ${textColor}`}>{isDay ? 'Day Shift' : 'Night Shift'}</h3>
+                    <p className={`text-[10px] font-bold uppercase tracking-wider opacity-60 mt-0.5 ${textColor}`}>{isDay ? '08:00 - 20:00' : '20:00 - 08:00'}</p>
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6 flex-grow flex flex-col gap-6 overflow-hidden">
-                {/* Testers Section */}
-                <div className="flex-1 min-h-0 flex flex-col">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-base-400 mb-3 flex items-center gap-2">
-                        Testers
-                        <span className="px-2 py-0.5 rounded-full bg-base-100 dark:bg-base-700 text-base-600 dark:text-base-300 text-[10px]">{assignedTesters.length}</span>
-                    </h4>
-                    <div className={`flex-1 rounded-2xl border-2 border-dashed ${borderColor} bg-base-50/50 dark:bg-base-900/30 p-3 overflow-y-auto custom-scrollbar content-start flex flex-wrap gap-2 transition-colors hover:bg-base-50 dark:hover:bg-base-900/50`}>
-                        {assignedTesters.length === 0 ? (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-base-300 dark:text-base-600 italic text-sm">
-                                <span>No testers assigned</span>
-                            </div>
-                        ) : (
-                            assignedTesters.map(t => <AssignedChip key={t.id} tester={t} theme={theme} onRemove={() => onRemove(t.id, shift)} />)
-                        )}
-                    </div>
-                </div>
-
-                {/* Assistants Section */}
-                <div className="flex-1 min-h-0 flex flex-col">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-base-400 mb-3 flex items-center gap-2">
-                        Assistants
-                        <span className="px-2 py-0.5 rounded-full bg-base-100 dark:bg-base-700 text-base-600 dark:text-base-300 text-[10px]">{assignedAssistants.length}</span>
-                    </h4>
-                    <div className={`flex-1 rounded-2xl border-2 border-dashed ${borderColor} bg-base-50/50 dark:bg-base-900/30 p-3 overflow-y-auto custom-scrollbar content-start flex flex-wrap gap-2 transition-colors hover:bg-base-50 dark:hover:bg-base-900/50`}>
-                        {assignedAssistants.length === 0 ? (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-base-300 dark:text-base-600 italic text-sm">
-                                <span>No assistants assigned</span>
-                            </div>
-                        ) : (
-                            assignedAssistants.map(t => <AssignedChip key={t.id} tester={t} theme={theme} onRemove={() => onRemove(t.id, shift)} />)
-                        )}
-                    </div>
+            {/* Content - Unified List */}
+            <div className={`flex-grow p-3 overflow-y-auto custom-scrollbar bg-base-50/50 dark:bg-base-900/30`}>
+                <div className="space-y-2">
+                    {allPersonnel.length === 0 ? (
+                        <div className="h-32 flex flex-col items-center justify-center text-base-300 dark:text-base-600 italic text-xs">
+                            <span>No staff assigned</span>
+                        </div>
+                    ) : (
+                        allPersonnel.map(p => (
+                            <AssignedChip key={p.id} tester={p} theme={theme} onRemove={() => onRemove(p.id, shift)} />
+                        ))
+                    )}
                 </div>
             </div>
         </div>
@@ -311,7 +298,7 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
             </div>
             
             <div className="flex-grow min-h-0 grid grid-cols-1 xl:grid-cols-12 gap-6">
-                {/* LEFT: Calendar & Actions */}
+                {/* LEFT: Calendar & Actions (3 Cols) */}
                 <div className="xl:col-span-3 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2">
                     <CalendarWidget selectedDate={selectedDate} onSelectDate={setSelectedDate} scheduledDates={scheduledDates} />
                     
@@ -335,8 +322,8 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
                     </div>
                 </div>
 
-                {/* MIDDLE: Shift Boards */}
-                <div className="xl:col-span-6 flex flex-col gap-4 min-h-0">
+                {/* MIDDLE: Shift Boards (Day & Night) - 5 Cols */}
+                <div className="xl:col-span-5 flex flex-col min-h-0">
                     {isLoading ? (
                         <div className="flex-1 flex items-center justify-center bg-white dark:bg-base-800 rounded-3xl border border-base-200 dark:border-base-700">
                             <div className="text-center space-y-3">
@@ -345,41 +332,38 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
                             </div>
                         </div>
                     ) : (
-                        <>
-                            <div className="flex-1 min-h-0"><ShiftBoard shift="day" assignedTesters={getPeople(shiftData.dayT)} assignedAssistants={getPeople(shiftData.dayA)} onRemove={(id,s)=>handleShiftChange(id,s,'remove')} /></div>
-                            <div className="flex-1 min-h-0"><ShiftBoard shift="night" assignedTesters={getPeople(shiftData.nightT)} assignedAssistants={getPeople(shiftData.nightA)} onRemove={(id,s)=>handleShiftChange(id,s,'remove')} /></div>
-                        </>
+                        <div className="flex gap-4 h-full">
+                            <ShiftBoard shift="day" assignedTesters={getPeople(shiftData.dayT)} assignedAssistants={getPeople(shiftData.dayA)} onRemove={(id,s)=>handleShiftChange(id,s,'remove')} />
+                            <ShiftBoard shift="night" assignedTesters={getPeople(shiftData.nightT)} assignedAssistants={getPeople(shiftData.nightA)} onRemove={(id,s)=>handleShiftChange(id,s,'remove')} />
+                        </div>
                     )}
                 </div>
 
-                {/* RIGHT: Staff Pool */}
-                <div className="xl:col-span-3 flex flex-col bg-white dark:bg-base-800 rounded-3xl shadow-sm border border-base-200 dark:border-base-700 overflow-hidden h-full">
-                    <div className="p-5 border-b border-base-100 dark:border-base-700 bg-base-50/50 dark:bg-base-700/30 flex justify-between items-center">
-                        <h3 className="font-bold text-lg text-base-800 dark:text-base-200 flex items-center gap-2">
-                            <UserGroupIcon className="h-5 w-5 text-primary-500"/> Staff Pool
-                        </h3>
-                        <span className="text-xs font-bold bg-base-200 dark:bg-base-600 px-2 py-1 rounded text-base-600 dark:text-base-300">{tTeam.length + aTeam.length} Total</span>
-                    </div>
-                    
-                    <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-                        <div>
-                            <div className="flex items-center justify-between mb-3 px-1">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-base-400">Testers</h4>
-                                <span className="text-[10px] bg-base-100 px-1.5 py-0.5 rounded text-base-500">{tTeam.length}</span>
-                            </div>
-                            <div className="grid grid-cols-1 gap-2.5">
-                                {tTeam.map(t => <EmployeeCard key={t.id} employee={t} dayAssigned={shiftData.dayT.has(t.id)} nightAssigned={shiftData.nightT.has(t.id)} onAdd={(id,s)=>handleShiftChange(id,s,'add')} />)}
-                            </div>
+                {/* RIGHT: Staff Pools (Testers & Assistants) - 4 Cols */}
+                <div className="xl:col-span-4 flex gap-4 h-full min-h-0">
+                    {/* Testers Pool */}
+                    <div className="flex-1 flex flex-col bg-white dark:bg-base-800 rounded-3xl shadow-sm border border-base-200 dark:border-base-700 overflow-hidden">
+                        <div className="p-4 border-b border-base-100 dark:border-base-700 bg-base-50/50 dark:bg-base-700/30 flex justify-between items-center">
+                            <h3 className="font-bold text-sm text-base-800 dark:text-base-200 flex items-center gap-2">
+                                <UserGroupIcon className="h-4 w-4 text-primary-500"/> Testers
+                            </h3>
+                            <span className="text-[10px] font-bold bg-base-200 dark:bg-base-600 px-2 py-0.5 rounded text-base-600 dark:text-base-300">{tTeam.length}</span>
                         </div>
-                        
-                        <div>
-                            <div className="flex items-center justify-between mb-3 px-1">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-base-400">Assistants</h4>
-                                <span className="text-[10px] bg-base-100 px-1.5 py-0.5 rounded text-base-500">{aTeam.length}</span>
-                            </div>
-                            <div className="grid grid-cols-1 gap-2.5">
-                                {aTeam.map(t => <EmployeeCard key={t.id} employee={t} dayAssigned={shiftData.dayA.has(t.id)} nightAssigned={shiftData.nightA.has(t.id)} onAdd={(id,s)=>handleShiftChange(id,s,'add')} />)}
-                            </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                            {tTeam.map(t => <EmployeeCard key={t.id} employee={t} dayAssigned={shiftData.dayT.has(t.id)} nightAssigned={shiftData.nightT.has(t.id)} onAdd={(id,s)=>handleShiftChange(id,s,'add')} />)}
+                        </div>
+                    </div>
+
+                    {/* Assistants Pool */}
+                    <div className="flex-1 flex flex-col bg-white dark:bg-base-800 rounded-3xl shadow-sm border border-base-200 dark:border-base-700 overflow-hidden">
+                        <div className="p-4 border-b border-base-100 dark:border-base-700 bg-base-50/50 dark:bg-base-700/30 flex justify-between items-center">
+                            <h3 className="font-bold text-sm text-base-800 dark:text-base-200 flex items-center gap-2">
+                                <UserGroupIcon className="h-4 w-4 text-primary-500"/> Assistants
+                            </h3>
+                            <span className="text-[10px] font-bold bg-base-200 dark:bg-base-600 px-2 py-0.5 rounded text-base-600 dark:text-base-300">{aTeam.length}</span>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                            {aTeam.map(t => <EmployeeCard key={t.id} employee={t} dayAssigned={shiftData.dayA.has(t.id)} nightAssigned={shiftData.nightA.has(t.id)} onAdd={(id,s)=>handleShiftChange(id,s,'add')} />)}
                         </div>
                     </div>
                 </div>

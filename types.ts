@@ -22,6 +22,7 @@ export interface RawTask {
     isReturned?: boolean;
     returnReason?: string | null;
     returnedBy?: string | null;
+    plannerNote?: string | null; // Added for custom notes by planner
 }
 
 export interface Tester {
