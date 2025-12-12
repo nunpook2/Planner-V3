@@ -565,6 +565,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                     });
 
                     await addAssignedTask({
+                        id: '',
                         requestId: originalTask.id, 
                         tasks: itemsToAssign, 
                         category: originalTask.category,
