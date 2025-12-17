@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Tester, CategorizedTask, DailySchedule, RawTask, AssignedTask, TestMapping } from '../types';
 import { TaskCategory, TaskStatus } from '../types';
@@ -11,10 +10,9 @@ import {
     deleteCategorizedTask, 
     updateCategorizedTask,
     assignItemsToPrepare,
-    getTestMappings,
-    addCategorizedTask
+    getTestMappings
 } from '../services/dataService';
-import { CheckCircleIcon, ChevronDownIcon, TrashIcon } from './common/Icons';
+import { CheckCircleIcon, ChevronDownIcon } from './common/Icons';
 
 // --- HELPER COMPONENTS ---
 
@@ -39,8 +37,7 @@ const AssignmentModal: React.FC<{
     personnel: { testers: Tester[]; assistants: Tester[] };
     isPreparation: boolean;
     selectedItemCount: number;
-    isProcessing: boolean;
-}> = ({ isOpen, onClose, onAssign, personnel, isPreparation, selectedItemCount, isProcessing }) => {
+}> = ({ isOpen, onClose, onAssign, personnel, isPreparation, selectedItemCount }) => {
     if (!isOpen) return null;
 
     const peopleToList = isPreparation ? personnel.assistants : personnel.testers;
@@ -48,7 +45,7 @@ const AssignmentModal: React.FC<{
     const role = isPreparation ? "Assistants" : "Testers";
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-40 animate-fade-in" onClick={!isProcessing ? onClose : undefined}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-40 animate-fade-in" onClick={onClose}>
             <div className="bg-white dark:bg-base-800 rounded-xl shadow-2xl p-6 w-full max-w-lg m-4 space-y-4 animate-slide-in-up" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-base-800 dark:text-base-200">{title}</h2>
                 <p className="text-sm text-base-500">Assigning <span className="font-semibold text-primary-600 dark:text-primary-400">{selectedItemCount} selected items</span> to an on-shift person.</p>
@@ -62,8 +59,7 @@ const AssignmentModal: React.FC<{
                                     <span className="font-medium">{person.name}</span>
                                     <button
                                         onClick={() => onAssign(person)}
-                                        disabled={isProcessing}
-                                        className="px-4 py-1.5 text-xs font-bold bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50"
+                                        className="px-4 py-1.5 text-xs font-bold bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
                                     >
                                         Assign
                                     </button>
@@ -76,7 +72,7 @@ const AssignmentModal: React.FC<{
                 </div>
 
                 <div className="pt-2 flex justify-end">
-                    <button onClick={onClose} disabled={isProcessing} className="px-5 py-2 bg-base-200 dark:bg-base-600 font-semibold rounded-lg hover:bg-base-300 dark:hover:bg-base-500 transition-colors disabled:opacity-50">
+                    <button onClick={onClose} className="px-5 py-2 bg-base-200 dark:bg-base-600 font-semibold rounded-lg hover:bg-base-300 dark:hover:bg-base-500 transition-colors">
                         Cancel
                     </button>
                 </div>
@@ -127,52 +123,6 @@ const getTaskGridHeader = (task: RawTask, mappings: TestMapping[]): string | nul
     return null;
 };
 
-const isValidTask = (task: RawTask): boolean => {
-    const isManual = task.ManualEntry === true;
-    if (isManual) return true;
-
-    const desc = String(getTaskValue(task, 'Description') || '').trim();
-    const variant = String(getTaskValue(task, 'Variant') || '').trim();
-    const sampleName = String(getTaskValue(task, 'Sample Name') || '').trim();
-    
-    const garbageValues = ['0', '-', 'n/a', 'nil', 'none', 'nan', 'null'];
-    if (garbageValues.includes(desc.toLowerCase())) return false;
-    
-    if (!desc && !variant) return false;
-    
-    const reqId = String(getTaskValue(task, 'Request ID') || '');
-    if (sampleName === reqId && reqId !== '') return false;
-
-    return true;
-};
-
-const getDueDateTimestamp = (tasks: RawTask[]): number => {
-    // Find any task in the group that has a Due finish date
-    const taskWithDate = tasks.find(t => getTaskValue(t, 'Due finish'));
-    const dateVal = taskWithDate ? getTaskValue(taskWithDate, 'Due finish') : null;
-
-    if (!dateVal) return Infinity; 
-
-    if (typeof dateVal === 'number') {
-        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-        return excelEpoch.getTime() + dateVal * 24 * 60 * 60 * 1000;
-    }
-
-    const strVal = String(dateVal).trim();
-    let date = new Date(strVal);
-    if (!isNaN(date.getTime())) return date.getTime();
-
-    const parts = strVal.split(/[\/\-]/);
-    if (parts.length === 3 && parts[2].length === 4) {
-         const day = parseInt(parts[0], 10);
-         const month = parseInt(parts[1], 10);
-         const year = parseInt(parts[2], 10);
-         date = new Date(year, month - 1, day);
-         if (!isNaN(date.getTime())) return date.getTime();
-    }
-    return Infinity;
-};
-
 
 // --- MAIN COMPONENT ---
 
@@ -188,18 +138,9 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
     const [selectedShift, setSelectedShift] = useState<'day' | 'night'>('day');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isAssigningToPrepare, setIsAssigningToPrepare] = useState(false); 
     const [notification, setNotification] = useState<string | null>(null);
     const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
     const [expandedCell, setExpandedCell] = useState<{ docId: string; header: string } | null>(null);
-    const [isAssigning, setIsAssigning] = useState(false);
-    
-    // Manual Task States
-    const [manualDesc, setManualDesc] = useState('');
-    const [manualQty, setManualQty] = useState('');
-    const [manualVariant, setManualVariant] = useState(''); 
-    const [confirmDeleteManual, setConfirmDeleteManual] = useState<{docId: string, index: number} | null>(null);
-    const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
@@ -244,13 +185,6 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
 
     const filteredTasks = useMemo(() => {
         return categorizedTasks.filter(task => {
-            if (activeCategory === TaskCategory.Manual) {
-                return task.category === TaskCategory.Manual;
-            }
-            if (task.category === TaskCategory.Manual) {
-                return false;
-            }
-
             const categoryMatch = activeCategory === 'all' || task.category === activeCategory;
             const idMatch = filterRequestId === '' || task.id.toLowerCase().includes(filterRequestId.toLowerCase());
             
@@ -262,21 +196,10 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
     }, [categorizedTasks, activeCategory, filterRequestId]);
 
     const gridData = useMemo(() => {
-        const mergedRows: Record<string, {
-            docId: string;
-            requestId: string;
-            originalTask: CategorizedTask;
-            cells: Record<string, { task: RawTask; originalIndex: number }[]>;
-            unmappedItems: { task: RawTask; originalIndex: number }[];
-            minDueDate: number;
-        }> = {};
-
-        filteredTasks.forEach(taskGroup => {
-            if (!taskGroup.docId) return;
-            
+        return filteredTasks.map(taskGroup => {
             const cells: Record<string, { task: RawTask; originalIndex: number }[]> = {};
             const unmappedItems: { task: RawTask; originalIndex: number }[] = [];
-            
+
             const itemsToProcess = activeCategory === 'prepare'
                 ? taskGroup.tasks.map((t, i) => ({ task: t, originalIndex: i })).filter(item => !item.task.preparationStatus)
                 : taskGroup.tasks.map((t, i) => ({ task: t, originalIndex: i })).filter(item => item.task.preparationStatus !== 'Awaiting Preparation');
@@ -290,18 +213,15 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                     unmappedItems.push(item);
                 }
             });
-            
-            mergedRows[taskGroup.docId] = {
-                docId: taskGroup.docId,
+
+            return {
+                docId: taskGroup.docId!,
                 requestId: taskGroup.id,
                 originalTask: taskGroup,
                 cells,
                 unmappedItems,
-                minDueDate: getDueDateTimestamp(taskGroup.tasks)
             };
         });
-
-        return Object.values(mergedRows).sort((a, b) => a.minDueDate - b.minDueDate);
     }, [filteredTasks, testMappings, activeCategory]);
 
     // --- Interaction Handlers ---
@@ -324,37 +244,10 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         });
     }, []);
     
+    // FIX: Explicitly typed the accumulator `acc` as a number to resolve an error where it was being inferred as `unknown`.
     const totalSelectedCount = useMemo(() => Object.values(selectedItems).reduce((acc: number, set: Set<number>) => acc + set.size, 0), [selectedItems]);
 
-    const openAssignModal = () => {
-        let hasPreparingItems = false;
-        for (const docId in selectedItems) {
-            const taskGroup = categorizedTasks.find(t => t.docId === docId);
-            if (!taskGroup) continue;
-            const indices = Array.from(selectedItems[docId]);
-            if (taskGroup.tasks.some((t, idx) => indices.includes(idx) && t.preparationStatus === 'Awaiting Preparation')) {
-                hasPreparingItems = true;
-                break;
-            }
-        }
-
-        if (hasPreparingItems) {
-            setNotification("Cannot assign items that are waiting for preparation (Yellow status).");
-            return;
-        }
-
-        setIsAssigningToPrepare(false);
-        setIsModalOpen(true);
-    };
-
-    const openPrepareModal = () => {
-        setIsAssigningToPrepare(true);
-        setIsModalOpen(true);
-    };
-
     const handleConfirmAssignment = async (selectedPerson: Tester) => {
-        if (isAssigning) return; // Prevent double clicks
-        
         const assignmentsByDocId: Record<string, number[]> = {};
         for (const docId in selectedItems) {
             if (selectedItems[docId].size > 0) assignmentsByDocId[docId] = [...selectedItems[docId]];
@@ -362,7 +255,6 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         
         if (Object.keys(assignmentsByDocId).length === 0) return;
 
-        setIsAssigning(true);
         try {
             for (const docId in assignmentsByDocId) {
                 const originalTask = categorizedTasks.find(t => t.docId === docId);
@@ -372,37 +264,17 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                 if (activeCategory === 'prepare') {
                     await assignItemsToPrepare(originalTask, selectedIndices, selectedPerson, selectedDate, selectedShift);
                 } else {
-                    const itemsToAssign = selectedIndices.map(index => {
-                         const item = originalTask.tasks[index];
-                        // If it's a Manual task, CLONE it with a new ID so the original stays as a template
-                        if (originalTask.category === TaskCategory.Manual) {
-                            return { 
-                                ...item, 
-                                _id: Math.random().toString(36).substring(2) + Date.now().toString(36) 
-                            };
-                        }
-                        return item;
-                    });
-                    
+                    const itemsToAssign = selectedIndices.map(index => originalTask.tasks[index]);
                     const remainingItems = originalTask.tasks.filter((_, index) => !selectedIndices.includes(index));
 
                     await addAssignedTask({
-                        id: '',
-                        requestId: originalTask.id, 
-                        tasks: itemsToAssign, 
-                        category: originalTask.category,
-                        testerId: selectedPerson.id, 
-                        testerName: selectedPerson.name,
-                        assignedDate: selectedDate, 
-                        shift: selectedShift, 
-                        status: TaskStatus.Pending,
+                        requestId: originalTask.id, tasks: itemsToAssign, category: originalTask.category,
+                        testerId: selectedPerson.id, testerName: selectedPerson.name,
+                        assignedDate: selectedDate, shift: selectedShift, status: TaskStatus.Pending,
                     });
 
-                    // Only remove items from the pool if it's NOT a Manual task
-                    if (originalTask.category !== TaskCategory.Manual) {
-                        if (remainingItems.length > 0) await updateCategorizedTask(docId, { tasks: remainingItems });
-                        else await deleteCategorizedTask(docId);
-                    }
+                    if (remainingItems.length > 0) await updateCategorizedTask(docId, { tasks: remainingItems });
+                    else await deleteCategorizedTask(docId);
                 }
             }
             setNotification(`Assigned ${totalSelectedCount} items to ${selectedPerson.name}.`);
@@ -411,60 +283,11 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
             console.error("Failed to assign task:", err);
             setError(`Failed to assign task: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
-            setIsAssigning(false);
             setIsModalOpen(false);
             fetchData();
         }
     };
     
-    // --- EXPORT FUNCTION ---
-    const handleExport = () => {
-        // ... (Export logic omitted for brevity as it is similar to TasksTab.tsx)
-    };
-    
-    // Manual Task Handlers
-     const handleQuickAddManual = async () => {
-        if (!manualDesc.trim()) return; 
-        try {
-            const newTaskItem: RawTask = {
-                'Description': manualDesc,
-                'Quantity': manualQty || '1', 
-                'Variant': manualVariant, 
-                'ManualEntry': true, 
-                _id: Math.random().toString(36).substring(2) + Date.now().toString(36)
-            };
-
-            await addCategorizedTask({
-                id: `MAN-${Date.now().toString().slice(-6)}`,
-                category: TaskCategory.Manual,
-                tasks: [newTaskItem],
-                createdAt: new Date().toISOString()
-            });
-
-            setManualDesc('');
-            setManualQty('');
-            setManualVariant('');
-            setNotification("Manual task added successfully");
-            fetchData();
-        } catch (e) {
-            setNotification("Failed to add manual task");
-        }
-    };
-
-    const handleDeleteManualTask = async () => {
-        if (!confirmDeleteManual) return;
-        const { docId } = confirmDeleteManual;
-        try {
-            await deleteCategorizedTask(docId);
-            setNotification("Manual task deleted");
-            fetchData();
-        } catch (e) {
-            setNotification("Failed to delete task");
-        } finally {
-            setConfirmDeleteManual(null);
-        }
-    };
-
     // --- RENDER COMPONENTS ---
     const CategoryButton: React.FC<{ name: string; value: string; count: number }> = ({ name, value, count }) => (
         <button
@@ -519,53 +342,23 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
     return (
         <div className="space-y-4 animate-slide-in-up h-full flex flex-col">
             {notification && <Toast message={notification} onDismiss={() => setNotification(null)} />}
-            <AssignmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAssign={handleConfirmAssignment} personnel={onShiftPersonnel} isPreparation={activeCategory === 'prepare'} selectedItemCount={totalSelectedCount} isProcessing={isAssigning} />
+            <AssignmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAssign={handleConfirmAssignment} personnel={onShiftPersonnel} isPreparation={activeCategory === 'prepare'} selectedItemCount={totalSelectedCount}/>
             
             <div className="flex-shrink-0 space-y-4">
                 <h2 className="text-2xl font-bold">Assign Tasks</h2>
-                {/* ... (Header and filters UI same as TasksTab.tsx) ... */}
-                 <div className="p-4 bg-base-100 dark:bg-base-900/50 rounded-lg border dark:border-base-700 space-y-4">
+                <div className="p-4 bg-base-100 dark:bg-base-900/50 rounded-lg border dark:border-base-700 space-y-4">
                     <div className="flex flex-wrap items-center gap-2"><CategoryButton name="All" value="all" count={getCategoryCount('all')}/><CategoryButton name="Urgent" value={TaskCategory.Urgent} count={getCategoryCount(TaskCategory.Urgent)}/><CategoryButton name="Normal" value={TaskCategory.Normal} count={getCategoryCount(TaskCategory.Normal)}/><CategoryButton name="PoCat" value={TaskCategory.PoCat} count={getCategoryCount(TaskCategory.PoCat)}/><CategoryButton name="Prepare" value="prepare" count={getCategoryCount('prepare')}/></div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t dark:border-base-700 pt-4"><input type="text" placeholder="Filter by Request ID..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-2 rounded-lg bg-white dark:bg-base-700 border"/><div><label className="text-xs font-semibold text-base-500">Date</label><input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full mt-1 p-2 rounded-lg bg-white dark:bg-base-700 border"/></div><div><label className="text-xs font-semibold text-base-500">Shift</label><select value={selectedShift} onChange={e => setSelectedShift(e.target.value as 'day'|'night')} className="w-full mt-1 p-2 rounded-lg bg-white dark:bg-base-700 border"><option value="day">Day</option><option value="night">Night</option></select></div></div>
                 </div>
                 <div className="p-2 bg-base-100 dark:bg-base-900/50 rounded-lg border dark:border-base-700 flex justify-between items-center sticky top-0 z-10">
                     <h3 className="font-semibold text-base-700 dark:text-base-300">Total Selected: <span className="text-primary-600 dark:text-primary-400 font-bold">{totalSelectedCount} items</span></h3>
-                    <div className="flex gap-2">
-                         <button onClick={openPrepareModal} disabled={totalSelectedCount === 0} className="px-4 py-2 text-sm font-semibold bg-amber-400 text-amber-900 rounded-md hover:bg-amber-500 hover:text-white transition-colors shadow-sm disabled:opacity-50">Send to Prepare</button>
-                         <button onClick={openAssignModal} disabled={totalSelectedCount === 0} className="px-4 py-2 text-sm font-semibold bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors shadow-sm disabled:bg-base-400 disabled:cursor-not-allowed">Assign Selected</button>
-                    </div>
+                    <button onClick={() => setIsModalOpen(true)} disabled={totalSelectedCount === 0} className="px-4 py-2 text-sm font-semibold bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors shadow-sm disabled:bg-base-400 disabled:cursor-not-allowed">Assign Selected</button>
                 </div>
             </div>
 
             <div className="flex-grow overflow-auto border dark:border-base-700 rounded-lg">
                 {isLoading ? (<div className="text-center p-8">Loading tasks...</div>) :
                  error ? (<div className="p-8 text-center text-red-600">{error}</div>) : 
-                 activeCategory === TaskCategory.Manual ? (
-                     <div className="p-4">
-                        {/* Manual Task UI */}
-                         <div className="mb-4 p-4 border rounded bg-base-50">
-                             <h3>Quick Add Manual Task</h3>
-                             <div className="flex gap-2 mt-2">
-                                <input placeholder="Description" value={manualDesc} onChange={e=>setManualDesc(e.target.value)} className="border p-1 flex-grow"/>
-                                <input placeholder="Qty" value={manualQty} onChange={e=>setManualQty(e.target.value)} className="border p-1 w-20"/>
-                                <button onClick={handleQuickAddManual} className="bg-primary-600 text-white px-3 py-1 rounded">Add</button>
-                             </div>
-                         </div>
-                         <table className="min-w-full text-sm">
-                             <thead><tr><th>Select</th><th>Desc</th><th>Qty</th><th>Action</th></tr></thead>
-                             <tbody>
-                                 {categorizedTasks.filter(t => t.category === TaskCategory.Manual).map(g => (
-                                     <tr key={g.docId}>
-                                         <td><input type="checkbox" checked={selectedItems[g.docId!]?.has(0)} onChange={e => handleSelectItem(g.docId!, 0, e.target.checked)}/></td>
-                                         <td>{getTaskValue(g.tasks[0], 'Description')}</td>
-                                         <td>{getTaskValue(g.tasks[0], 'Quantity')}</td>
-                                         <td><button onClick={()=>setConfirmDeleteManual({docId:g.docId!, index:0})}><TrashIcon className="h-4 w-4 text-red-500"/></button></td>
-                                     </tr>
-                                 ))}
-                             </tbody>
-                         </table>
-                     </div>
-                 ) : 
                  gridData.length === 0 ? (<div className="p-8 text-center text-base-500">No tasks to assign for the selected filters.</div>) : (
                     <table className="min-w-full text-sm text-left table-fixed">
                         <thead className="bg-base-100 dark:bg-base-800 sticky top-0 z-10">

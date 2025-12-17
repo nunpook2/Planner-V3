@@ -62,12 +62,8 @@ const Toast: React.FC<{ message: string; isError?: boolean; onDismiss: () => voi
 const TesterManager: React.FC<{ testers: Tester[]; onRefreshTesters: () => void; setNotification: (n: any) => void }> = ({ testers, onRefreshTesters, setNotification }) => {
     const [newTesterName, setNewTesterName] = useState('');
     const [selectedTeam, setSelectedTeam] = useState<'testers_3_3' | 'assistants_4_2'>('testers_3_3');
-    
-    // Edit State
     const [editingTesterId, setEditingTesterId] = useState<string | null>(null);
     const [tempName, setTempName] = useState('');
-    const [tempTeam, setTempTeam] = useState<'testers_3_3' | 'assistants_4_2' | ''>('');
-    
     const [deleteId, setDeleteId] = useState<string | null>(null);
 
     const handleAdd = async () => {
@@ -91,51 +87,19 @@ const TesterManager: React.FC<{ testers: Tester[]; onRefreshTesters: () => void;
         setDeleteId(null);
     };
 
-    const startEdit = (t: Tester) => { 
-        setEditingTesterId(t.id); 
-        setTempName(t.name);
-        setTempTeam(t.team || '');
-    };
-    
-    const saveEdit = async (id: string) => { 
-        try {
-            await updateTester(id, { name: tempName, team: tempTeam || null } as any); 
-            setEditingTesterId(null); 
-            onRefreshTesters();
-            setNotification({ message: "Updated successfully." });
-        } catch (e) {
-            setNotification({ message: "Update failed.", isError: true });
-        }
-    };
+    const startEdit = (t: Tester) => { setEditingTesterId(t.id); setTempName(t.name); };
+    const saveEdit = async (id: string) => { await updateTester(id, { name: tempName }); setEditingTesterId(null); onRefreshTesters(); };
 
-    const groups = [
-        { 
-            title: "Testers (3 Days / 3 Nights)", 
-            data: testers.filter(t => t.team === 'testers_3_3'),
-            headerClass: "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 border-indigo-100 dark:border-indigo-800"
-        },
-        { 
-            title: "Assistants (4 Days / 2 Off)", 
-            data: testers.filter(t => t.team === 'assistants_4_2'),
-            headerClass: "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-200 border-amber-100 dark:border-amber-800"
-        },
-        { 
-            title: "Unassigned / Legacy", 
-            data: testers.filter(t => !t.team || (t.team !== 'testers_3_3' && t.team !== 'assistants_4_2')),
-            headerClass: "bg-base-100 dark:bg-base-700 text-base-600 dark:text-base-300 border-base-200 dark:border-base-600"
-        }
-    ];
+    const teamList = (team: 'testers_3_3' | 'assistants_4_2') => testers.filter(t => t.team === team);
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <ConfirmationModal 
                 isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={confirmDelete}
                 title="Remove Personnel" message="Are you sure you want to remove this person? This cannot be undone."
                 confirmText="Remove" confirmColor="bg-red-600"
             />
-            
-            {/* ADD FORM */}
-            <div className="bg-white dark:bg-base-800 p-6 rounded-2xl shadow-sm border border-base-200 dark:border-base-700 h-fit sticky top-4">
+            <div className="bg-white dark:bg-base-800 p-6 rounded-2xl shadow-sm border border-base-200 dark:border-base-700 h-fit">
                 <h3 className="font-bold text-lg text-base-900 dark:text-base-100 mb-4">Add Personnel</h3>
                 <div className="space-y-4">
                     <div>
@@ -152,57 +116,34 @@ const TesterManager: React.FC<{ testers: Tester[]; onRefreshTesters: () => void;
                     <button onClick={handleAdd} disabled={!newTesterName.trim()} className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl shadow-md transition-all disabled:opacity-50">Add Person</button>
                 </div>
             </div>
-
-            {/* LISTS */}
             <div className="space-y-6">
-                {groups.map(group => (
+                {[ { title: "Testers", data: teamList('testers_3_3') }, { title: "Assistants", data: teamList('assistants_4_2') } ].map(group => (
                     <div key={group.title} className="bg-white dark:bg-base-800 rounded-2xl shadow-sm border border-base-200 dark:border-base-700 overflow-hidden">
-                        <div className={`px-5 py-3 border-b ${group.headerClass} flex justify-between items-center`}>
-                            <h4 className="font-bold text-sm uppercase tracking-wide">{group.title}</h4>
-                            <span className="text-xs font-bold bg-white/50 px-2 py-0.5 rounded-full">{group.data.length}</span>
-                        </div>
+                        <div className="bg-base-50 dark:bg-base-700/50 px-5 py-3 border-b border-base-200 dark:border-base-700"><h4 className="font-bold text-base-700 dark:text-base-200">{group.title}</h4></div>
                         <ul className="divide-y divide-base-100 dark:divide-base-700">
                             {group.data.map(t => (
-                                <li key={t.id} className="p-3 flex justify-between items-center hover:bg-base-50 dark:hover:bg-base-700/50 transition-colors group">
+                                <li key={t.id} className="p-3 flex justify-between items-center hover:bg-base-50 dark:hover:bg-base-700/50 transition-colors">
                                     {editingTesterId === t.id ? (
-                                        <div className="flex flex-col sm:flex-row gap-2 flex-grow mr-2 w-full">
-                                            <input 
-                                                type="text" 
-                                                value={tempName} 
-                                                onChange={e=>setTempName(e.target.value)} 
-                                                className="flex-grow p-2 text-sm border rounded-lg dark:bg-base-900 dark:border-base-600 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-                                            />
-                                            <select 
-                                                value={tempTeam} 
-                                                onChange={e => setTempTeam(e.target.value as any)} 
-                                                className="p-2 text-sm border rounded-lg dark:bg-base-900 dark:border-base-600 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
-                                            >
-                                                <option value="">Unassigned</option>
-                                                <option value="testers_3_3">Tester</option>
-                                                <option value="assistants_4_2">Assistant</option>
-                                            </select>
-                                            <div className="flex items-center gap-1">
-                                                <button onClick={()=>saveEdit(t.id)} className="bg-emerald-100 text-emerald-600 hover:bg-emerald-200 p-2 rounded-lg transition-colors"><CheckCircleIcon className="h-4 w-4"/></button>
-                                                <button onClick={()=>setEditingTesterId(null)} className="bg-base-100 text-base-500 hover:bg-base-200 p-2 rounded-lg transition-colors"><XCircleIcon className="h-4 w-4"/></button>
-                                            </div>
+                                        <div className="flex items-center gap-2 flex-grow mr-2">
+                                            <input type="text" value={tempName} onChange={e=>setTempName(e.target.value)} className="flex-grow p-2 text-sm border rounded-lg dark:bg-base-900 dark:border-base-600 dark:text-white"/>
+                                            <button onClick={()=>saveEdit(t.id)} className="text-emerald-500 hover:bg-emerald-50 p-1 rounded"><CheckCircleIcon/></button>
+                                            <button onClick={()=>setEditingTesterId(null)} className="text-red-500 hover:bg-red-50 p-1 rounded"><XCircleIcon/></button>
                                         </div>
                                     ) : (
-                                        <>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-base-100 dark:bg-base-700 flex items-center justify-center text-xs font-bold text-base-500 dark:text-base-400 border border-base-200 dark:border-base-600">
-                                                    {t.name.substring(0,2).toUpperCase()}
-                                                </div>
-                                                <span className="font-medium text-base-700 dark:text-base-200">{t.name}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => startEdit(t)} className="p-2 text-base-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"><PencilIcon/></button>
-                                                <button onClick={() => setDeleteId(t.id)} className="p-2 text-base-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon/></button>
-                                            </div>
-                                        </>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-base-100 dark:bg-base-700 flex items-center justify-center text-xs font-bold text-base-500 dark:text-base-400">{t.name.substring(0,2).toUpperCase()}</div>
+                                            <span className="font-medium text-base-700 dark:text-base-200">{t.name}</span>
+                                        </div>
+                                    )}
+                                    {!editingTesterId && (
+                                        <div className="flex items-center gap-1">
+                                            <button onClick={() => startEdit(t)} className="p-2 text-base-400 hover:text-primary-600"><PencilIcon/></button>
+                                            <button onClick={() => setDeleteId(t.id)} className="p-2 text-base-400 hover:text-red-600"><TrashIcon/></button>
+                                        </div>
                                     )}
                                 </li>
                             ))}
-                            {group.data.length === 0 && <li className="p-6 text-center text-sm text-base-400 italic bg-base-50/50">No personnel in this group.</li>}
+                            {group.data.length === 0 && <li className="p-4 text-center text-sm text-base-400 italic">No personnel added.</li>}
                         </ul>
                     </div>
                 ))}
@@ -406,7 +347,7 @@ const MappingManager: React.FC<{ setNotification: (n: any) => void }> = ({ setNo
                         await updateTestMapping(existingMatch.id, { headerGroup, headerSub, order });
                         updatedCount++;
                     } else {
-                        await addTestMapping({ id: '', description: desc, variant: variant, headerGroup, headerSub, order });
+                        await addTestMapping({ description: desc, variant: variant, headerGroup, headerSub, order });
                         addedCount++;
                     }
                 }
@@ -439,7 +380,7 @@ const MappingManager: React.FC<{ setNotification: (n: any) => void }> = ({ setNo
         if (!m.headerGroup || !m.headerSub) { setNotification({ message: "Group and Sub-Header are required", isError: true }); return; }
         try {
             if (m.id) { await updateTestMapping(m.id, m); setNotification({ message: "Mapping updated" }); } 
-            else { await addTestMapping({ ...m, order: mappings.length, id: '' } as any); setNotification({ message: "New mapping added" }); }
+            else { await addTestMapping({ ...m, order: mappings.length } as any); setNotification({ message: "New mapping added" }); }
             setIsEditModalOpen(false); fetchData();
         } catch(e) { setNotification({ message: "Failed to save mapping", isError: true }); }
     };

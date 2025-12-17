@@ -106,17 +106,3 @@ export interface TestMapping {
     headerSub: string;
     order?: number;
 }
-
-export interface LabReport {
-    id?: string;
-    date: string;
-    shift: 'day' | 'night';
-    toolsStatus: 'Normal' | 'Abnormal';
-    toolsIssue?: string;
-    cleanlinessStatus: 'Clean' | 'Not Clean';
-    cleanlinessArea?: string;
-    cleanlinessImage?: string; // Base64
-    wasteLevel: 'Green' | 'Yellow' | 'Red';
-    reporter: string;
-    timestamp: number;
-}

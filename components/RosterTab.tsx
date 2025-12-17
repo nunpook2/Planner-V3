@@ -96,14 +96,14 @@ const AssignedChip: React.FC<{
     
     return (
         <div className={`group flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-xl border shadow-sm transition-all hover:shadow-md ${bgClass} w-full`}>
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${iconBg}`}>
+            <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${iconBg}`}>
                 {getInitials(tester.name)}
             </div>
-            <div className="flex-grow min-w-0 flex flex-col leading-none">
-                <span className="text-xs font-bold truncate">{tester.name}</span>
+            <div className="flex-grow min-w-0 flex flex-col leading-tight">
+                <span className="text-xs font-bold truncate" title={tester.name}>{tester.name}</span>
                 <span className="text-[9px] opacity-70 truncate">{isAssistant ? 'Assistant' : 'Tester'}</span>
             </div>
-            <button onClick={onRemove} className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100 text-base-300 hover:text-red-500 transition-colors">
+            <button onClick={onRemove} className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-full hover:bg-red-100 text-base-300 hover:text-red-500 transition-colors">
                 ✕
             </button>
         </div>
@@ -138,7 +138,7 @@ const EmployeeCard: React.FC<{
                 </div>
                 
                 <div className="flex-grow min-w-0">
-                    <p className={`font-semibold text-xs truncate ${isFullyAssigned ? 'text-base-400' : 'text-base-800 dark:text-base-100'}`}>
+                    <p className={`font-semibold text-xs truncate leading-tight ${isFullyAssigned ? 'text-base-400' : 'text-base-800 dark:text-base-100'}`} title={employee.name}>
                         {employee.name}
                     </p>
                     <div className="flex items-center gap-1 mt-0.5">
@@ -147,7 +147,7 @@ const EmployeeCard: React.FC<{
                 </div>
 
                 {!isFullyAssigned && (
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <button 
                             onClick={() => onAdd(employee.id, 'day')} 
                             disabled={dayAssigned || nightAssigned} 
@@ -322,8 +322,8 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
                     </div>
                 </div>
 
-                {/* MIDDLE: Shift Boards (Day & Night) - 5 Cols */}
-                <div className="xl:col-span-5 flex flex-col min-h-0">
+                {/* MIDDLE: Shift Boards (Day & Night) - REDUCED to 4 Cols */}
+                <div className="xl:col-span-4 flex flex-col min-h-0">
                     {isLoading ? (
                         <div className="flex-1 flex items-center justify-center bg-white dark:bg-base-800 rounded-3xl border border-base-200 dark:border-base-700">
                             <div className="text-center space-y-3">
@@ -339,8 +339,8 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
                     )}
                 </div>
 
-                {/* RIGHT: Staff Pools (Testers & Assistants) - 4 Cols */}
-                <div className="xl:col-span-4 flex gap-4 h-full min-h-0">
+                {/* RIGHT: Staff Pools (Testers & Assistants) - INCREASED to 5 Cols */}
+                <div className="xl:col-span-5 flex gap-4 h-full min-h-0">
                     {/* Testers Pool */}
                     <div className="flex-1 flex flex-col bg-white dark:bg-base-800 rounded-3xl shadow-sm border border-base-200 dark:border-base-700 overflow-hidden">
                         <div className="p-4 border-b border-base-100 dark:border-base-700 bg-base-50/50 dark:bg-base-700/30 flex justify-between items-center">
