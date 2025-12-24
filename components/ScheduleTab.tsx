@@ -1,9 +1,16 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Tester, AssignedTask, RawTask, CategorizedTask, AssignedPrepareTask } from '../types';
 import { TaskStatus, TaskCategory } from '../types';
-import { getAssignedTasks, updateAssignedTask, deleteAssignedTask, returnTaskToPool, getAssignedPrepareTasks, updateAssignedPrepareTask, markItemAsPrepared, getCategorizedTasks, unassignTaskToPool } from '../services/dataService';
-import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, ChevronDownIcon, RefreshIcon, AlertTriangleIcon } from './common/Icons';
+import { 
+    getAssignedTasks, updateAssignedTask, deleteAssignedTask, 
+    getAssignedPrepareTasks, markItemAsPrepared, 
+    addCategorizedTask, unassignTaskToPool
+} from '../services/dataService';
+import { 
+    CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, 
+    RefreshIcon, AlertTriangleIcon, BeakerIcon, 
+    ClipboardListIcon, CalendarIcon, UserGroupIcon, DownloadIcon
+} from './common/Icons';
 
 declare const XLSX: any;
 
@@ -12,733 +19,292 @@ interface ScheduleTabProps {
     onTasksUpdated: () => void;
 }
 
-const ALL_COLUMNS = [
-    'Request ID', 'Sample Name', 'Description', 'Variant', 'Due finish', 'Priority', 'Purpose', 'Testing Condition', 'Note to planer', 'Planner Note', 'SDIDATAID'
-];
-
-// Fixed column widths to ensure alignment across different tables
-const COLUMN_WIDTHS: Record<string, string> = {
-    'Request ID': '120px',
-    'Sample Name': '180px',
-    'Description': '350px', 
-    'Variant': '130px',
-    'Due finish': '110px',
-    'Priority': '100px',
-    'Purpose': '120px',
-    'Testing Condition': '150px',
-    'Note to planer': '200px',
-    'Planner Note': '200px',
-    'SDIDATAID': '120px',
-};
-
-const formatDate = (dateString: string | number) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return String(dateString);
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
-const getTaskValue = (task: RawTask, header: string): string | number => {
-    const lowerCaseHeader = header.toLowerCase().trim();
-    const key = Object.keys(task).find(k => k.toLowerCase().trim() === lowerCaseHeader);
-    return key ? task[key] : '';
-};
-
-const isValidTask = (task: RawTask): boolean => {
-    if (task.ManualEntry) return true;
-    const desc = String(getTaskValue(task, 'Description') || '').trim();
-    const variant = String(getTaskValue(task, 'Variant') || '').trim();
-    const sampleName = String(getTaskValue(task, 'Sample Name') || '').trim();
-    const garbageValues = ['0', '-', 'n/a', 'nil', 'none', 'nan', 'null'];
-    if (garbageValues.includes(desc.toLowerCase())) return false;
-    if (!desc && !variant) return false;
-    const reqId = String(getTaskValue(task, 'Request ID') || '');
-    if (sampleName === reqId) return false;
-    return true;
-};
-
-const ReasonPromptModal: React.FC<{
-    prompt: { action: 'notOk' | 'return'; docId: string; index: number; taskName: string; } | null;
+const LocalModal: React.FC<{
+    isOpen: boolean;
     onClose: () => void;
-    onSubmit: (reason: string) => void;
-}> = ({ prompt, onClose, onSubmit }) => {
-    const [reason, setReason] = useState('');
-    if (!prompt) return null;
+    onConfirm: (inputValue?: string) => void;
+    title: string;
+    message: string;
+    showInput?: boolean;
+    inputPlaceholder?: string;
+    confirmText?: string;
+    confirmColor?: string;
+}> = ({ isOpen, onClose, onConfirm, title, message, showInput, inputPlaceholder, confirmText = "Confirm", confirmColor = "bg-primary-600" }) => {
+    const [val, setVal] = useState('');
+    useEffect(() => { if (isOpen) setVal(''); }, [isOpen]);
+    if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-base-900/40 backdrop-blur-sm flex justify-center items-center z-50 animate-fade-in">
-            <div className="bg-white dark:bg-base-800 rounded-2xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-slide-in-up border border-base-200">
-                <h3 className="text-xl font-bold">{prompt.action === 'notOk' ? 'Report Issue' : 'Return Task'}</h3>
-                <p className="text-sm text-base-500">Why are you flagging <span className="font-semibold text-base-800">{prompt.taskName}</span>?</p>
-                <textarea value={reason} onChange={e => setReason(e.target.value)} className="w-full p-3 border rounded-xl bg-base-50 focus:ring-2 focus:ring-primary-500 outline-none transition-all" placeholder="Enter reason..." rows={3}/>
-                <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-base-500 hover:bg-base-100 font-medium">Cancel</button>
-                    <button onClick={() => onSubmit(reason)} disabled={!reason.trim()} className="px-6 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 shadow-md disabled:opacity-50 font-semibold">Submit</button>
+        <div className="fixed inset-0 bg-base-900/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-fade-in" onClick={onClose}>
+            <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-6 w-full max-w-md m-4 space-y-4 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-black text-base-900 dark:text-base-100 tracking-tighter">{title}</h3>
+                <p className="text-xs font-medium text-base-600 dark:text-base-300 leading-relaxed">{message}</p>
+                {showInput && (
+                    <input autoFocus type="text" value={val} onChange={e => setVal(e.target.value)} placeholder={inputPlaceholder} className="w-full p-3 bg-base-50 dark:bg-base-950 border border-base-200 dark:border-base-800 rounded-xl focus:ring-4 focus:ring-primary-500/10 outline-none dark:text-white font-bold text-sm" onKeyDown={e => { if (e.key === 'Enter' && val.trim()) onConfirm(val); }} />
+                )}
+                <div className="flex justify-end gap-3 pt-2">
+                    <button onClick={onClose} className="px-4 py-2 text-xs font-black text-base-400 hover:text-base-800 uppercase tracking-widest">Cancel</button>
+                    <button onClick={() => onConfirm(showInput ? val : undefined)} disabled={showInput && !val.trim()} className={`px-6 py-2 text-xs font-black text-white rounded-xl shadow-lg transition-all disabled:opacity-50 uppercase tracking-widest ${confirmColor}`}>{confirmText}</button>
                 </div>
             </div>
         </div>
     );
 };
 
-interface TaskItemDetail { sampleName: string; status: TaskStatus | 'Returned' | 'Prepared' | 'Pending'; remark?: string; requestId: string; category?: TaskCategory; }
-interface TaskGroupSummary { description: string; total: number; done: number; items: TaskItemDetail[]; }
-interface SummaryPersonData { testerName: string; total: number; done: number; notOk: number; returned: number; taskGroups: TaskGroupSummary[]; }
-
-const SummaryView: React.FC<{ data: SummaryPersonData[] }> = ({ data }) => {
-    return (
-        <div className="space-y-8">
-            <div className="flex flex-wrap justify-center gap-6 p-4 bg-white dark:bg-base-800 rounded-full border border-base-200 shadow-sm max-w-3xl mx-auto">
-                <div className="flex items-center gap-2 text-sm font-medium"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-200"></span> Completed</div>
-                <div className="flex items-center gap-2 text-sm font-medium"><span className="w-2.5 h-2.5 rounded-full bg-base-300 shadow-sm"></span> Pending</div>
-                <div className="flex items-center gap-2 text-sm font-medium"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm shadow-red-200"></span> Not OK</div>
-                <div className="flex items-center gap-2 text-sm font-medium"><span className="w-2.5 h-2.5 rounded-full bg-orange-400 shadow-sm shadow-orange-200"></span> Returned</div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {data.map((person) => {
-                    const progressPercent = person.total > 0 ? (person.done / person.total) * 100 : 0;
-                    const notOkPercent = person.total > 0 ? (person.notOk / person.total) * 100 : 0;
-                    const returnedPercent = person.total > 0 ? (person.returned / person.total) * 100 : 0;
-                    const initials = person.testerName.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
-
-                    return (
-                        <div key={person.testerName} className="bg-white dark:bg-base-800 rounded-2xl border border-base-200 dark:border-base-700 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
-                            <div className="p-6 pb-4 border-b border-base-100 flex justify-between items-start bg-gradient-to-br from-white to-base-50">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-white border-2 border-base-100 shadow-sm flex items-center justify-center font-bold text-primary-600 text-lg">{initials}</div>
-                                    <div><h3 className="font-bold text-lg text-base-900 leading-tight">{person.testerName}</h3><p className="text-xs font-semibold text-base-400 uppercase tracking-wide mt-1">{person.total} Tasks</p></div>
-                                </div>
-                                <div className="text-right"><span className="text-3xl font-black text-primary-600">{Math.round(progressPercent)}%</span></div>
-                            </div>
-                            <div className="h-1.5 w-full flex bg-base-100"><div style={{ width: `${progressPercent}%` }} className="h-full bg-emerald-500"></div><div style={{ width: `${notOkPercent}%` }} className="h-full bg-red-500"></div><div style={{ width: `${returnedPercent}%` }} className="h-full bg-orange-400"></div></div>
-                            <div className="p-0 flex-grow overflow-y-auto custom-scrollbar max-h-[400px]">
-                                {person.taskGroups.length === 0 ? <div className="p-10 text-center text-base-400 font-medium">All clear! No tasks assigned.</div> : (
-                                    <div className="divide-y divide-base-100">
-                                        {person.taskGroups.map((group, idx) => {
-                                            const hasIssues = group.items.some(i => i.status === TaskStatus.NotOK);
-                                            const hasReturns = group.items.some(i => i.status === 'Returned');
-                                            const isAllDone = group.items.every(i => i.status === TaskStatus.Done || i.status === 'Prepared');
-                                            
-                                            // Clean Look: White bg, use Left Border for status indication
-                                            let borderClass = "border-l-4 border-l-base-300"; // Default Gray
-                                            if (hasIssues) borderClass = "border-l-4 border-l-red-500";
-                                            else if (hasReturns) borderClass = "border-l-4 border-l-orange-400";
-                                            else if (isAllDone) borderClass = "border-l-4 border-l-emerald-500";
-
-                                            return (
-                                                <details key={idx} className={`group transition-colors bg-white hover:bg-base-50 dark:bg-base-800 dark:hover:bg-base-700/50 ${borderClass}`}>
-                                                    <summary className="p-4 cursor-pointer list-none flex justify-between items-center gap-3">
-                                                        <div className="flex-1 min-w-0"><div className={`font-semibold text-sm truncate flex items-center gap-2 text-base-800 dark:text-base-200`}><ChevronDownIcon className="h-4 w-4 text-base-400 group-open:rotate-180 transition-transform flex-shrink-0" />{group.description}</div></div>
-                                                        <span className={`text-xs font-bold px-2 py-1 rounded-md ${hasIssues ? 'text-red-600 bg-red-50' : hasReturns ? 'text-orange-600 bg-orange-50' : isAllDone ? 'text-emerald-600 bg-emerald-50' : 'text-base-500 bg-base-100'}`}>{group.done}/{group.total}</span>
-                                                    </summary>
-                                                    <div className="px-4 pb-4 pt-1 space-y-2 pl-9">
-                                                        {group.items.map((item, itemIdx) => {
-                                                            let badge = null;
-                                                            
-                                                            if (item.status === TaskStatus.Done || item.status === 'Prepared') {
-                                                                badge = (
-                                                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                                                        <CheckCircleIcon className="h-3 w-3"/> OK
-                                                                    </span>
-                                                                );
-                                                            } else if (item.status === TaskStatus.NotOK) {
-                                                                badge = (
-                                                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-100">
-                                                                        <XCircleIcon className="h-3 w-3"/> Not OK
-                                                                    </span>
-                                                                );
-                                                            } else if (item.status === 'Returned') {
-                                                                badge = (
-                                                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100">
-                                                                        <AlertTriangleIcon className="h-3 w-3"/> Return
-                                                                    </span>
-                                                                );
-                                                            } else {
-                                                                badge = (
-                                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-base-100 text-base-400">
-                                                                        Pending
-                                                                    </span>
-                                                                );
-                                                            }
-
-                                                            return (
-                                                                <div key={itemIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg hover:bg-base-50/80 transition-colors border-b border-dashed border-base-100 last:border-0">
-                                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                                        <span className="font-medium text-xs text-base-700 dark:text-base-300 truncate" title={item.sampleName}>
-                                                                            {item.sampleName}
-                                                                        </span>
-                                                                        {item.category === TaskCategory.PoCat && <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-status-pocat text-white uppercase tracking-wider">PoCat</span>}
-                                                                    </div>
-                                                                    <div className="flex items-center gap-3">
-                                                                        {item.remark && <span className="text-[10px] text-red-500 italic max-w-[120px] truncate" title={item.remark}>— {item.remark}</span>}
-                                                                        {badge}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </details>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-};
-
-const DetailedView: React.FC<{
-    data: { testerName: string; testingTasks: AssignedTask[]; prepareTasks: AssignedPrepareTask[]; }[];
-    onStatusChange: (docId: string, index: number, status: TaskStatus) => void;
-    onReturn: (docId: string, index: number) => void;
-    onPlannerUnassign: (docId: string, index: number) => void;
-    onMarkPrepared: (prepTask: AssignedPrepareTask, itemIndex: number) => void;
-    onNoteChange: (docId: string, index: number, note: string) => void;
-    visibleColumns: Set<string>;
-    expandedSections: Set<string>;
-    toggleSection: (name: string) => void;
-}> = ({ data, onStatusChange, onReturn, onPlannerUnassign, onMarkPrepared, onNoteChange, visibleColumns, expandedSections, toggleSection }) => {
-    
-    const renderCombinedTable = (assignments: (AssignedTask | AssignedPrepareTask)[], type: 'testing' | 'prepare') => {
-        const isPrep = type === 'prepare';
-        const allItemsRaw = assignments.flatMap(assignment => assignment.tasks.map((task, index) => ({ task, originalIndex: index, parentDocId: assignment.id, parentAssignment: assignment, requestId: assignment.requestId })));
-        
-        // --- ROBUST DEDUPLICATION LOGIC ---
-        const seenKeys = new Set<string>();
-        const allItems = allItemsRaw.filter(item => {
-            if (!isValidTask(item.task)) return false;
-            const uniqueKey = item.task._id 
-                ? item.task._id 
-                : `${item.requestId}|${getTaskValue(item.task, 'Sample Name')}|${getTaskValue(item.task, 'Description')}|${getTaskValue(item.task, 'Variant')}`;
-            if (seenKeys.has(uniqueKey)) return false;
-            seenKeys.add(uniqueKey);
-            return true;
-        });
-
-        if (allItems.length === 0) return null;
-        const activeCols = ALL_COLUMNS.filter(col => visibleColumns.has(col));
-
-        // GROUPING LOGIC
-        const groupedItems: Record<string, typeof allItems> = {};
-        allItems.forEach(item => {
-            const rid = item.requestId || 'Unknown';
-            if (!groupedItems[rid]) groupedItems[rid] = [];
-            groupedItems[rid].push(item);
-        });
-
-        // Helper for colors
-        const getGroupColor = (str: string) => {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            const h = Math.abs(hash % 360);
-            return {
-                bg: `hsl(${h}, 70%, 98%)`,
-                border: `hsl(${h}, 60%, 50%)`,
-                text: `hsl(${h}, 60%, 30%)`
-            };
-        };
-
-        return (
-            <div className="overflow-x-auto custom-scrollbar border border-base-200 rounded-lg">
-                <table className="min-w-full text-left table-fixed border-collapse">
-                    <thead className="bg-base-50 sticky top-0 z-10 shadow-sm">
-                        <tr>
-                            {!isPrep && <th className="p-3 font-bold uppercase tracking-wider text-xs text-base-500 w-24 border-b border-base-200">Status</th>}
-                            {activeCols.map(h => (
-                                <th 
-                                    key={h} 
-                                    className="p-3 font-bold uppercase tracking-wider text-xs text-base-500 whitespace-nowrap border-b border-base-200" 
-                                    style={{ width: COLUMN_WIDTHS[h] || '150px' }}
-                                >
-                                    {h}
-                                </th>
-                            ))}
-                            <th className="p-3 font-bold uppercase tracking-wider text-xs text-base-500 text-right w-44 border-b border-base-200">Actions</th>
-                        </tr>
-                    </thead>
-                    {Object.entries(groupedItems).map(([reqId, groupItems]) => {
-                        const colors = getGroupColor(reqId);
-                        const isPoCat = groupItems[0].parentAssignment.category === TaskCategory.PoCat;
-
-                        return (
-                            <tbody key={reqId} className="relative">
-                                {/* Spacer Row */}
-                                <tr className="h-4 border-none bg-white"><td colSpan={100}></td></tr>
-                                
-                                {/* Group Header */}
-                                <tr style={{ backgroundColor: colors.bg, borderLeft: `4px solid ${colors.border}` }}>
-                                    <td colSpan={100} className="p-2 border-y border-base-200/50">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-sm" style={{ color: colors.text }}>{reqId.replace(/^RS1-/, '')}</span>
-                                            <span className="text-xs px-2 py-0.5 rounded-full bg-white/60 text-base-600 font-medium border border-black/5">{groupItems.length} items</span>
-                                            {isPoCat && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-status-pocat text-white uppercase tracking-wider shadow-sm">PoCat</span>}
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                {/* Items */}
-                                {groupItems.map(({ task: item, originalIndex, parentDocId, parentAssignment, requestId }, idx) => (
-                                    <tr key={`${parentDocId}-${originalIndex}-${idx}`} className="hover:bg-white/50 transition-colors border-b border-base-200/50 last:border-b-0" style={{ backgroundColor: colors.bg, borderLeft: `4px solid ${colors.border}` }}>
-                                        {!isPrep && (
-                                            <td className="p-2">
-                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${item.status === TaskStatus.Done ? 'bg-emerald-100 text-emerald-700' : item.status === TaskStatus.NotOK ? 'bg-red-100 text-red-700' : 'bg-white/50 text-base-600 border border-base-200'}`}>
-                                                    {item.status || 'Pending'}
-                                                </span>
-                                            </td>
-                                        )}
-                                        {activeCols.map(col => (
-                                            <td key={col} className="p-2 text-sm text-base-700 align-top" title={String(getTaskValue(item, col) || '')}>
-                                                {col === 'Request ID' ? (
-                                                    <span className="text-xs text-base-400 font-mono opacity-50">{requestId.replace('RS1-', '')}</span>
-                                                ) : col === 'Due finish' ? (
-                                                    formatDate(getTaskValue(item, col))
-                                                ) : col === 'Description' ? (
-                                                    <span className="block whitespace-normal text-sm leading-snug">{getTaskValue(item, col)}</span>
-                                                ) : col === 'Planner Note' ? (
-                                                     <div className="relative">
-                                                        <input 
-                                                            type="text" 
-                                                            defaultValue={item.plannerNote || ''}
-                                                            onBlur={(e) => onNoteChange(parentDocId, originalIndex, e.target.value)}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    onNoteChange(parentDocId, originalIndex, (e.target as HTMLInputElement).value);
-                                                                    (e.target as HTMLInputElement).blur();
-                                                                }
-                                                            }}
-                                                            placeholder="Note..."
-                                                            className="w-full bg-white/50 border border-base-300/50 rounded px-2 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-400 focus:ring-2 focus:ring-primary-500 outline-none transition-all placeholder:text-base-400"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <span className="truncate block">{getTaskValue(item, col)}</span>
-                                                )}
-                                            </td>
-                                        ))}
-                                        <td className="p-2 text-right whitespace-nowrap align-top">
-                                            {isPrep ? (
-                                                item.preparationStatus === 'Prepared' ? 
-                                                <span className="flex items-center justify-end gap-1 text-emerald-600 font-bold text-xs"><CheckCircleIcon className="h-4 w-4"/> Ready</span> : 
-                                                <button onClick={() => onMarkPrepared(parentAssignment as AssignedPrepareTask, originalIndex)} className="px-2 py-1 text-xs font-bold text-white bg-emerald-500 rounded hover:bg-emerald-600 shadow-sm transition-all">Mark Ready</button>
-                                            ) : (
-                                                <div className="flex gap-2 justify-end opacity-100 transition-opacity duration-200">
-                                                    <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.Done)} className="flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Mark Done">
-                                                        <CheckCircleIcon className="h-3.5 w-3.5"/> Done
-                                                    </button>
-                                                    <button onClick={() => onStatusChange(parentDocId, originalIndex, TaskStatus.NotOK)} className="flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Mark Not OK">
-                                                        <XCircleIcon className="h-3.5 w-3.5"/> Fail
-                                                    </button>
-                                                    <button onClick={() => onReturn(parentDocId, originalIndex)} className="flex items-center gap-1 bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Return Task">
-                                                        <ArrowUturnLeftIcon className="h-3.5 w-3.5"/>
-                                                    </button>
-                                                    <button onClick={() => onPlannerUnassign(parentDocId, originalIndex)} className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-md shadow-sm transition-all text-xs font-bold" title="Re-plan">
-                                                        <RefreshIcon className="h-3.5 w-3.5"/>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        );
-                    })}
-                </table>
-            </div>
-        );
-    };
-
-    return (
-        <div className="space-y-6 pb-8">
-            {data.map(({ testerName, testingTasks, prepareTasks }) => {
-                const isOpen = expandedSections.has(testerName);
-                return (
-                    <div key={testerName} className="bg-white rounded-2xl shadow-sm border border-base-200 overflow-hidden">
-                        <div 
-                            onClick={() => toggleSection(testerName)}
-                            className="p-4 cursor-pointer flex justify-between items-center bg-base-50 hover:bg-base-100 transition-colors select-none"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className={`bg-white border border-base-200 p-2 rounded-full text-primary-600 shadow-sm transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
-                                    <ChevronDownIcon className="h-5 w-5"/>
-                                </div>
-                                <h3 className="font-bold text-lg text-base-800">{testerName}</h3>
-                            </div>
-                        </div>
-                        {isOpen && (
-                            <div className="p-4 border-t border-base-200 space-y-6 animate-fade-in">
-                                {prepareTasks.length > 0 && <div><h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2 bg-amber-50 inline-block px-2 py-0.5 rounded-md border border-amber-100">Preparation Queue</h4>{renderCombinedTable(prepareTasks, 'prepare')}</div>}
-                                {testingTasks.length > 0 && <div><h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-2 bg-indigo-50 inline-block px-2 py-0.5 rounded-md border border-indigo-100">Testing Queue</h4>{renderCombinedTable(testingTasks, 'testing')}</div>}
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    );
+const getTaskValue = (task: RawTask, header: string): any => {
+    const keys = Object.keys(task);
+    const target = header.toLowerCase().trim();
+    const matchedKey = keys.find(k => k.toLowerCase().trim() === target);
+    return matchedKey ? task[matchedKey] : '';
 };
 
 const ScheduleTab: React.FC<ScheduleTabProps> = ({ testers, onTasksUpdated }) => {
-    const [assignedTestingTasks, setAssignedTestingTasks] = useState<AssignedTask[]>([]);
-    const [assignedPrepareTasks, setAssignedPrepareTasks] = useState<AssignedPrepareTask[]>([]);
-    const [returnedTasksPool, setReturnedTasksPool] = useState<CategorizedTask[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<'summary' | 'detailed'>('summary');
-    const [filters, setFilters] = useState({ startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0], testerId: 'all', shift: 'all' });
-    const [reasonPrompt, setReasonPrompt] = useState<{ action: 'notOk' | 'return'; docId: string; index: number; taskName: string; } | null>(null);
-    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(['Sample Name', 'Description', 'Variant', 'Planner Note']));
-    const [isColSelectorOpen, setIsColSelectorOpen] = useState(false);
-    const colSelectorRef = useRef<HTMLDivElement>(null);
-    
-    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-    const hasInitializedAccordions = useRef(false);
+    const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
+    const [prepareTasks, setPrepareTasks] = useState<AssignedPrepareTask[]>([]);
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedShift, setSelectedShift] = useState<'day' | 'night'>('day');
+    const [activePersonId, setActivePersonId] = useState<string>('');
+    const [notification, setNotification] = useState<{message: string, isError: boolean} | null>(null);
 
-    useEffect(() => { const h = (e:MouseEvent) => { if(colSelectorRef.current && !colSelectorRef.current.contains(e.target as Node)) setIsColSelectorOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
-    
-    // allowBackgroundUpdate flag prevents loading spinner from showing during action updates, preserving UI state (accordions)
-    const fetchTasks = async (allowBackgroundUpdate = false) => { 
-        if (!allowBackgroundUpdate) setIsLoading(true); 
-        setError(null); 
-        try { 
-            const [t, p, c] = await Promise.all([getAssignedTasks(), getAssignedPrepareTasks(), getCategorizedTasks()]); 
-            setAssignedTestingTasks(t); 
-            setAssignedPrepareTasks(p); 
-            setReturnedTasksPool(c); 
-            
-            // Only initialize accordions once when data is first loaded and there is data
-            if (!hasInitializedAccordions.current && (t.length > 0 || p.length > 0)) {
-                 const names = new Set<string>();
-                 t.forEach(task => task.testerName && names.add(task.testerName));
-                 p.forEach(task => task.assistantName && names.add(task.assistantName));
-                 setExpandedSections(names);
-                 hasInitializedAccordions.current = true;
-            }
-        } catch (e) { 
-            setError("Failed to load"); 
-        } finally { 
-            if (!allowBackgroundUpdate) setIsLoading(false); 
-        }
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean; title: string; message: string; showInput?: boolean; inputPlaceholder?: string; confirmText?: string; confirmColor?: string; onConfirm: (val?: string) => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
+
+    const fetchData = async () => {
+        try {
+            const [assigned, prepared] = await Promise.all([ getAssignedTasks(), getAssignedPrepareTasks() ]);
+            setAssignedTasks(assigned.filter(t => t.assignedDate === selectedDate && t.shift === selectedShift));
+            setPrepareTasks(prepared.filter(t => t.assignedDate === selectedDate && t.shift === selectedShift));
+        } catch (e) { console.error(e); }
     };
-    
-    useEffect(() => { fetchTasks(); }, []);
 
-    const toggleSection = (name: string) => {
-        setExpandedSections(prev => {
-            const next = new Set(prev);
-            if (next.has(name)) next.delete(name);
-            else next.add(name);
-            return next;
+    useEffect(() => { fetchData(); }, [selectedDate, selectedShift, activePersonId]);
+    useEffect(() => { if (notification) { const t = setTimeout(() => setNotification(null), 3000); return () => clearTimeout(t); } }, [notification]);
+
+    const activePerson = testers.find(t => t.id === activePersonId);
+    const personTasks = assignedTasks.filter(t => t.testerId === activePersonId);
+    const personPrepTasks = prepareTasks.filter(t => t.assistantId === activePersonId);
+
+    const groupedPersonTasks = useMemo(() => {
+        const groups: Record<string, { requestId: string, category: TaskCategory, items: { task: RawTask, sourceGroup: AssignedTask, index: number }[] }> = {};
+        personTasks.forEach(group => {
+            const effectiveId = group.category === TaskCategory.Manual ? 'AD-HOC-TASKS' : group.requestId;
+            const displayId = group.category === TaskCategory.Manual ? 'MANUAL TASKS' : group.requestId;
+            if (!groups[effectiveId]) groups[effectiveId] = { requestId: displayId, category: group.category, items: [] };
+            group.tasks.forEach((task, idx) => groups[effectiveId].items.push({ task, sourceGroup: group, index: idx }));
+        });
+        return Object.values(groups).sort((a, b) => a.requestId.localeCompare(b.requestId));
+    }, [personTasks]);
+
+    const groupedPrepTasks = useMemo(() => {
+        const groups: Record<string, { requestId: string, items: { task: RawTask, sourceGroup: AssignedPrepareTask, index: number }[] }> = {};
+        personPrepTasks.forEach(group => {
+            const effectiveId = group.category === TaskCategory.Manual ? 'MANUAL-PREP' : group.requestId;
+            const displayId = group.category === TaskCategory.Manual ? 'MANUAL PREP' : group.requestId;
+            if (!groups[effectiveId]) groups[effectiveId] = { requestId: displayId, items: [] };
+            group.tasks.forEach((task, idx) => groups[effectiveId].items.push({ task, sourceGroup: group, index: idx }));
+        });
+        return Object.values(groups).sort((a, b) => a.requestId.localeCompare(b.requestId));
+    }, [personPrepTasks]);
+
+    const handleUpdateStatus = async (group: AssignedTask, itemIndex: number, newStatus: TaskStatus, reason: string | null = null) => {
+        const updatedItems = [...group.tasks];
+        updatedItems[itemIndex] = { ...updatedItems[itemIndex], status: newStatus, notOkReason: reason };
+        await updateAssignedTask(group.id, { tasks: updatedItems });
+        fetchData();
+    };
+
+    const handleMarkPrepared = async (group: AssignedPrepareTask, itemIndex: number) => {
+        await markItemAsPrepared(group, itemIndex);
+        fetchData();
+    };
+
+    const handleCorrectionReturn = async (group: AssignedTask, itemIndex: number) => {
+        const item = group.tasks[itemIndex];
+        const categorizedTask: CategorizedTask = { id: group.requestId, category: group.category, tasks: [item], docId: group.id };
+        await unassignTaskToPool(categorizedTask);
+        const remaining = group.tasks.filter((_, idx) => idx !== itemIndex);
+        if (remaining.length > 0) await updateAssignedTask(group.id, { tasks: remaining });
+        else await deleteAssignedTask(group.id);
+        fetchData(); onTasksUpdated();
+    };
+
+    const handleTesterReturn = async (group: AssignedTask, itemIndex: number) => {
+        setModalConfig({
+            isOpen: true, title: "Report Issue", message: "Why abort?", showInput: true, inputPlaceholder: "Reason...", confirmText: "Report", confirmColor: "bg-red-600",
+            onConfirm: async (reason) => {
+                if (!reason) return;
+                const item = group.tasks[itemIndex];
+                await addCategorizedTask({ id: group.requestId, category: group.category, tasks: [{ ...item, isReturned: true, returnReason: reason, returnedBy: group.testerName }], isReturnedPool: true, createdAt: new Date().toISOString(), shift: group.shift, returnedBy: group.testerName, returnReason: reason, returnedDate: group.assignedDate } as any);
+                const remaining = group.tasks.filter((_, idx) => idx !== itemIndex);
+                if (remaining.length > 0) await updateAssignedTask(group.id, { tasks: remaining });
+                else await deleteAssignedTask(group.id);
+                fetchData(); onTasksUpdated(); setModalConfig(p => ({ ...p, isOpen: false }));
+            }
         });
     };
 
-    const { filteredTestingTasks, filteredPrepareTasks, filteredReturnedTasks } = useMemo(() => {
-        const startDate = new Date(filters.startDate); const endDate = new Date(filters.endDate); endDate.setHours(23, 59, 59, 999);
-        const filterTask = (task: any) => { const d = new Date(task.assignedDate); return d >= startDate && d <= endDate && (filters.testerId === 'all' || (task.testerId || task.assistantId) === filters.testerId) && (filters.shift === 'all' || task.shift === filters.shift); };
-        
-        const returned = returnedTasksPool.filter(task => { 
-            if (!task.isReturnedPool && !task.tasks.some(t => t.isReturned)) return false; 
-            const d = task.createdAt ? new Date(task.createdAt) : new Date(); 
-            if (d < startDate || d > endDate) return false; 
-            const r = task.returnedBy || task.tasks.find(t => t.returnedBy)?.returnedBy; 
-            if (!r) return false; 
-            if (filters.testerId !== 'all' && testers.find(t => t.id === filters.testerId)?.name !== r) return false; 
-            if (filters.shift !== 'all' && task.shift && task.shift !== filters.shift) return false;
-            return true; 
-        });
-
-        return { filteredTestingTasks: assignedTestingTasks.filter(filterTask), filteredPrepareTasks: assignedPrepareTasks.filter(filterTask), filteredReturnedTasks: returned };
-    }, [assignedTestingTasks, assignedPrepareTasks, returnedTasksPool, filters, testers]);
-
-    const summaryData = useMemo(() => {
-        const summaryMap = new Map<string, SummaryPersonData>();
-        const getPersonSummary = (name: string): SummaryPersonData => { if (!summaryMap.has(name)) summaryMap.set(name, { testerName: name, total: 0, done: 0, notOk: 0, returned: 0, taskGroups: [] }); return summaryMap.get(name)!; };
-        const addItemToSummary = (person: SummaryPersonData, desc: string, sampleName: string, status: any, remark?: string, requestId: string = '', category?: TaskCategory) => { person.total++; if (status === TaskStatus.Done || status === 'Prepared') person.done++; if (status === TaskStatus.NotOK) person.notOk++; if (status === 'Returned') person.returned++; let group = person.taskGroups.find(g => g.description === desc); if (!group) { group = { description: desc, total: 0, done: 0, items: [] }; person.taskGroups.push(group); } group.total++; if (status === TaskStatus.Done || status === 'Prepared') group.done++; group.items.push({ sampleName, status, remark, requestId, category }); };
-        
-        const seenTestingKeys = new Set<string>();
-        const seenPrepareKeys = new Set<string>();
-
-        filteredTestingTasks.forEach(task => task.testerName && task.tasks.forEach(item => {
-            if (!isValidTask(item)) return;
-            const uniqueKey = item._id ? item._id : `${task.requestId}|${getTaskValue(item, 'Sample Name')}|${getTaskValue(item.task, 'Description')}|${getTaskValue(item.task, 'Variant')}`;
-            if (seenTestingKeys.has(uniqueKey)) return; 
-            seenTestingKeys.add(uniqueKey);
-            addItemToSummary(getPersonSummary(task.testerName), (getTaskValue(item, 'Description') || getTaskValue(item, 'Sample Name') || 'N/A').toString(), (getTaskValue(item, 'Sample Name') || '').toString(), item.status || TaskStatus.Pending, item.notOkReason || undefined, task.requestId, task.category);
-        }));
-
-        filteredReturnedTasks.forEach(task => { const r = task.returnedBy || task.tasks.find(t => t.returnedBy)?.returnedBy; if (r) task.tasks.forEach(item => isValidTask(item) && addItemToSummary(getPersonSummary(r), (getTaskValue(item, 'Description') || getTaskValue(item, 'Sample Name') || 'N/A').toString(), (getTaskValue(item, 'Sample Name') || '').toString(), 'Returned', task.returnReason || item.returnReason || 'Returned', task.id, task.category)); });
-        
-        filteredPrepareTasks.forEach(task => task.assistantName && task.tasks.forEach(item => {
-            if (!isValidTask(item)) return;
-            const uniqueKey = item._id ? item._id : `${task.requestId}|${getTaskValue(item, 'Sample Name')}|${getTaskValue(item.task, 'Description')}`;
-            if (seenPrepareKeys.has(uniqueKey)) return; 
-            seenPrepareKeys.add(uniqueKey);
-            addItemToSummary(getPersonSummary(task.assistantName), `[Prep] ${getTaskValue(item, 'Description') || getTaskValue(item, 'Sample Name')}`, (getTaskValue(item, 'Sample Name') || '').toString(), item.preparationStatus === 'Prepared' ? 'Prepared' : 'Pending', undefined, task.requestId, task.category);
-        }));
-        
-        return Array.from(summaryMap.values()).sort((a, b) => a.testerName.localeCompare(b.testerName));
-    }, [filteredTestingTasks, filteredPrepareTasks, filteredReturnedTasks]);
-
-    const detailedData = useMemo(() => {
-        const personMap = new Map<string, any>();
-        const getEntry = (name: string) => { if (!personMap.has(name)) personMap.set(name, { testerName: name, testingTasks: [], prepareTasks: [] }); return personMap.get(name); };
-        filteredTestingTasks.forEach(t => t.testerName && getEntry(t.testerName).testingTasks.push(t));
-        filteredPrepareTasks.forEach(t => t.assistantName && getEntry(t.assistantName).prepareTasks.push(t));
-        return Array.from(personMap.values()).sort((a: any, b: any) => a.testerName.localeCompare(b.testerName));
-    }, [filteredTestingTasks, filteredPrepareTasks]);
-
-    const handleStatusChange = (docId: string, index: number, status: TaskStatus) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (!task) return; if (status === TaskStatus.NotOK) setReasonPrompt({ action: 'notOk', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); else { const original = assignedTestingTasks.find(t => t.id === docId); if (original) { const up = [...original.tasks]; up[index] = { ...up[index], status, notOkReason: null }; updateAssignedTask(docId, { tasks: up }).then(() => fetchTasks(true)); } } };
-    const handleReturnTask = (docId: string, index: number) => { const task = assignedTestingTasks.find(t => t.id === docId)?.tasks[index]; if (task) setReasonPrompt({ action: 'return', docId, index, taskName: (getTaskValue(task, 'Sample Name') || '') as string }); };
-    
-    const handlePlannerUnassign = async (docId: string, index: number) => {
-        const original = assignedTestingTasks.find(t => t.id === docId);
-        if (!original) return;
-        const item = original.tasks[index];
-        if (!item) return;
-
-        try {
-            const payload: CategorizedTask = { 
-                id: original.requestId, 
-                tasks: [item], 
-                category: original.category,
-            };
-            await unassignTaskToPool(payload);
-
-            const rem = original.tasks.filter((_, i) => i !== index);
-            if (rem.length === 0) await deleteAssignedTask(docId);
-            else await updateAssignedTask(docId, { tasks: rem });
-            
-            onTasksUpdated();
-            await fetchTasks(true);
-        } catch (e) {
-            console.error(e);
-            alert("Failed to unassign task");
-        }
-    };
-
-    const handleNoteChange = async (docId: string, index: number, note: string) => {
-        // Optimistic update
-        let found = false;
-        
-        // Try testing tasks
-        const testingTask = assignedTestingTasks.find(t => t.id === docId);
-        if (testingTask) {
-             const newTasks = [...testingTask.tasks];
-             newTasks[index] = { ...newTasks[index], plannerNote: note };
-             setAssignedTestingTasks(prev => prev.map(t => t.id === docId ? { ...t, tasks: newTasks } : t));
-             await updateAssignedTask(docId, { tasks: newTasks });
-             found = true;
-        }
-
-        if (!found) {
-            // Try prepare tasks
-            const prepareTask = assignedPrepareTasks.find(t => t.id === docId);
-            if (prepareTask) {
-                 const newTasks = [...prepareTask.tasks];
-                 newTasks[index] = { ...newTasks[index], plannerNote: note };
-                 setAssignedPrepareTasks(prev => prev.map(t => t.id === docId ? { ...t, tasks: newTasks } : t));
-                 await updateAssignedPrepareTask(docId, { tasks: newTasks });
-            }
-        }
-    };
-
-    const handleReasonSubmit = async (reason: string) => { 
-        if (!reasonPrompt) return; 
-        const { action, docId, index } = reasonPrompt; 
-        const original = assignedTestingTasks.find(t => t.id === docId); 
-        if (!original) return; 
-        setReasonPrompt(null); 
-        try { 
-            if (action === 'notOk') { 
-                const up = [...original.tasks]; 
-                up[index] = { ...up[index], status: TaskStatus.NotOK, notOkReason: reason }; 
-                await updateAssignedTask(docId, { tasks: up }); 
-            } else { 
-                const item = original.tasks[index]; 
-                const ret = { ...item, status: TaskStatus.Pending, notOkReason: null, isReturned: true, returnReason: reason, returnedBy: original.testerName || 'Unknown' }; 
-                const pay: CategorizedTask = { 
-                    id: original.requestId, 
-                    tasks: [ret], 
-                    category: original.category, 
-                    returnReason: reason, 
-                    returnedBy: original.testerName || 'Unknown', 
-                    isReturnedPool: true,
-                    shift: original.shift 
-                }; 
-                await returnTaskToPool(pay); 
-                
-                const rem = original.tasks.filter((_, i) => i !== index); 
-                if (rem.length === 0) await deleteAssignedTask(docId); 
-                else await updateAssignedTask(docId, { tasks: rem }); 
-                onTasksUpdated(); 
-            } 
-        } catch (e) { 
-            console.error(e); 
-        } finally { 
-            await fetchTasks(true); 
-        } 
-    };
-    
-    const handleMarkItemAsPrepared = async (prepTask: AssignedPrepareTask, itemIndex: number) => { await markItemAsPrepared(prepTask, itemIndex); await fetchTasks(true); onTasksUpdated(); };
-    
-    const exportToExcel = () => {
-        try {
-            // --- SET 1: Internal View (Original) ---
-            const internalRows: any[] = [];
-            detailedData.forEach(person => {
-                const tasks = [...person.testingTasks, ...person.prepareTasks];
-                tasks.forEach(group => {
-                     const isPrep = group.hasOwnProperty('assistantId');
-                     group.tasks.forEach(t => {
-                        if (!isValidTask(t)) return;
-                        const row: any = { 'Assigned Person': person.testerName, 'Type': isPrep ? 'Preparation' : 'Testing', 'Status': t.status || t.preparationStatus || 'Pending' };
-                        visibleColumns.forEach(col => {
-                           if (isPrep && col === 'SDIDATAID') { row[col] = ''; } 
-                           else { const val = getTaskValue(t, col); row[col] = col === 'Due finish' ? formatDate(val) : val; }
-                        });
-                        internalRows.push(row);
-                     });
-                });
-            });
-
-            // --- SET 2: Customer Import Format ---
-            const customerRows: any[][] = [];
-            customerRows.push(["Count of Variant"]);
-            customerRows.push(["SDIDATAID", "Assign Analyst", "Assign Start date"]);
-
-            // Helper for Customer Date Format DD/MM/YYYY
-            const formatCustomerDate = (dateVal: string) => {
-                 if (!dateVal) return '';
-                 // Handle standard YYYY-MM-DD string from date input to avoid timezone shifts
-                 if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
-                     const [year, month, day] = dateVal.split('-');
-                     return `${day}/${month}/${year}`;
-                 }
-                 // Fallback
-                 const d = new Date(dateVal);
-                 if (isNaN(d.getTime())) return '';
-                 return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-            };
-
-            detailedData.forEach(person => {
-                const allAssignments = [...person.testingTasks, ...person.prepareTasks];
-                allAssignments.forEach(assignment => {
-                    const isPrep = assignment.hasOwnProperty('assistantId');
-                    assignment.tasks.forEach(t => {
-                         if (!isValidTask(t)) return;
-                         let sdiDataId = '';
-                         if (!isPrep) { sdiDataId = String(getTaskValue(t, 'SDIDATAID') || ''); }
-                         const assignAnalyst = person.testerName;
-                         const assignStartDate = formatCustomerDate(assignment.assignedDate); 
-                         customerRows.push([sdiDataId, assignAnalyst, assignStartDate]);
-                    });
-                });
-            });
-
-            const wb = XLSX.utils.book_new();
-            const ws1 = XLSX.utils.json_to_sheet(internalRows);
-            XLSX.utils.book_append_sheet(wb, ws1, "Internal_View");
-            const ws2 = XLSX.utils.aoa_to_sheet(customerRows);
-            XLSX.utils.book_append_sheet(wb, ws2, "Customer_System");
-            XLSX.writeFile(wb, `Schedule_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-        } catch (e) {
-            console.error("Export failed", e);
-            alert("Failed to export Excel");
-        }
+    const handleExport = () => {
+        const executionData = assignedTasks.flatMap(group => 
+            group.tasks.map(task => ({
+                'Type': 'Execution',
+                'Personnel': group.testerName,
+                'Request ID': group.requestId,
+                'Description': getTaskValue(task, 'Description'),
+                'Quantity': getTaskValue(task, 'Quantity'),
+                'Sample Name': getTaskValue(task, 'Sample Name'),
+                'Variant': getTaskValue(task, 'Variant'),
+                'Status': task.status || 'Pending'
+            }))
+        );
+        const prepData = prepareTasks.flatMap(group => 
+            group.tasks.map(task => ({
+                'Type': 'Preparation',
+                'Personnel': group.assistantName,
+                'Request ID': group.requestId,
+                'Description': getTaskValue(task, 'Description'),
+                'Quantity': getTaskValue(task, 'Quantity'),
+                'Sample Name': getTaskValue(task, 'Sample Name'),
+                'Variant': getTaskValue(task, 'Variant'),
+                'Status': task.preparationStatus || 'Awaiting'
+            }))
+        );
+        const allData = [...executionData, ...prepData];
+        const ws = XLSX.utils.json_to_sheet(allData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Shift Assignments");
+        XLSX.writeFile(wb, `ShiftAssignments_${selectedDate}_${selectedShift}.xlsx`);
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-140px)] animate-slide-in-up">
-            <div className="flex-shrink-0 mb-4 space-y-4">
-                <div className="flex justify-between items-end">
-                    <div>
-                        <h2 className="text-2xl font-bold text-base-900 dark:text-base-100">Track Schedule</h2>
-                        <p className="text-sm text-base-500">Monitor assignments, status, and reporting</p>
+        <div className="flex flex-col h-full space-y-3 p-3">
+            <style>{`
+                .person-avatar { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+                .person-avatar.assistant { background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); }
+                .active-glow { box-shadow: 0 0 20px -5px rgba(99, 102, 241, 0.4); }
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .line-clamp-2 {
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;  
+                    overflow: hidden;
+                }
+            `}</style>
+            <LocalModal isOpen={modalConfig.isOpen} onClose={() => setModalConfig(p => ({ ...p, isOpen: false }))} onConfirm={modalConfig.onConfirm} title={modalConfig.title} message={modalConfig.message} showInput={modalConfig.showInput} inputPlaceholder={modalConfig.inputPlaceholder} confirmText={modalConfig.confirmText} confirmColor={modalConfig.confirmColor} />
+
+            <div className="flex-grow grid grid-cols-12 gap-4 min-h-0">
+                <div className="col-span-3 bg-white/40 dark:bg-base-900/40 rounded-[2rem] border border-white dark:border-base-800 shadow-sm flex flex-col overflow-hidden backdrop-blur-md">
+                    <div className="p-4 border-b border-white dark:border-base-800 bg-white/20 flex justify-between items-center">
+                        <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Staff List</h3>
+                        <button onClick={handleExport} title="Export All Assignments" className="p-1.5 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-lg hover:bg-base-50 transition-colors">
+                            <DownloadIcon className="h-4 w-4 text-base-500" />
+                        </button>
                     </div>
-                    <button onClick={exportToExcel} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all flex items-center gap-2">
-                        <span>Export Excel</span>
-                    </button>
+                    <div className="flex-grow overflow-y-auto no-scrollbar p-2 space-y-1.5">
+                        {testers.filter(t => assignedTasks.some(at => at.testerId === t.id) || prepareTasks.some(pt => pt.assistantId === t.id)).map(tester => {
+                            const isActive = activePersonId === tester.id;
+                            const isAssistant = tester.team === 'assistants_4_2';
+                            const count = assignedTasks.filter(at => at.testerId === tester.id).reduce((acc, g) => acc + g.tasks.length, 0) + prepareTasks.filter(pt => pt.assistantId === tester.id).reduce((acc, g) => acc + g.tasks.length, 0);
+                            return (
+                                <button key={tester.id} onClick={() => setActivePersonId(tester.id)} className={`w-full group flex items-center gap-3 p-2.5 rounded-[1.2rem] transition-all duration-300 border text-left ${isActive ? 'bg-gradient-to-r from-primary-600 to-indigo-600 border-primary-500 text-white shadow-lg active-glow scale-[1.01]' : 'bg-white/40 dark:bg-base-900/40 hover:bg-white dark:hover:bg-base-800 border-transparent'}`}>
+                                    <div className={`w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center text-[10px] font-black shadow-inner ${isAssistant ? 'person-avatar assistant' : 'person-avatar'} ${isActive ? 'ring-2 ring-white/30' : 'text-white'}`}>{tester.name.substring(0, 2).toUpperCase()}</div>
+                                    <div className="flex-grow min-w-0"><span className={`block text-[13px] font-black tracking-tight truncate ${isActive ? 'text-white' : 'text-base-800 dark:text-base-100'}`}>{tester.name}</span><span className={`text-[8px] font-bold uppercase tracking-widest ${isActive ? 'text-white/60' : 'text-base-400'}`}>{isAssistant ? 'Asst' : 'Anlst'}</span></div>
+                                    {count > 0 && <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${isActive ? 'bg-white text-primary-600' : 'bg-primary-500 text-white'}`}>{count}</div>}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div className="bg-white dark:bg-base-800 p-4 rounded-2xl border border-base-200 dark:border-base-700 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="md:col-span-1">
-                        <label className="text-xs font-bold text-base-400 uppercase ml-1">Date Range</label>
-                        <div className="flex gap-2 mt-1">
-                            <input type="date" value={filters.startDate} onChange={e => setFilters({ ...filters, startDate: e.target.value })} className="w-full p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all" />
-                            <input type="date" value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} className="w-full p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-base-400 uppercase ml-1">Filter by Person</label>
-                        <select value={filters.testerId} onChange={e => setFilters({ ...filters, testerId: e.target.value })} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all">
-                            <option value="all">All Personnel</option>
-                            {testers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-base-400 uppercase ml-1">Shift</label>
-                        <select value={filters.shift} onChange={e => setFilters({ ...filters, shift: e.target.value })} className="w-full mt-1 p-2.5 rounded-xl bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-700 text-sm focus:ring-2 focus:ring-primary-100 transition-all">
-                            <option value="all">All Shifts</option>
-                            <option value="day">Day Shift</option>
-                            <option value="night">Night Shift</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="flex justify-between items-center px-1">
-                    <div className="flex p-1 bg-base-100 dark:bg-base-800 rounded-xl border border-base-200 dark:border-base-700">
-                        <button onClick={() => setViewMode('summary')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'summary' ? 'bg-white dark:bg-base-700 text-base-800 dark:text-base-100 shadow-sm' : 'text-base-500 hover:text-base-700'}`}>Summary View</button>
-                        <button onClick={() => setViewMode('detailed')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'detailed' ? 'bg-white dark:bg-base-700 text-base-800 dark:text-base-100 shadow-sm' : 'text-base-500 hover:text-base-700'}`}>Detailed List</button>
+                <div className="col-span-9 bg-white/60 dark:bg-base-900/60 rounded-[2rem] border border-white dark:border-base-800 shadow-2xl flex flex-col overflow-hidden relative backdrop-blur-xl">
+                    <div className="px-6 py-3 border-b border-white dark:border-base-800 flex justify-between items-center bg-white/30 dark:bg-base-800/10">
+                        <div className="flex items-center gap-4">{activePerson && <><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black text-white shadow-xl ${activePerson.team === 'assistants_4_2' ? 'person-avatar assistant' : 'person-avatar'}`}>{activePerson.name.substring(0, 2).toUpperCase()}</div><h2 className="text-xl font-black text-base-900 dark:text-white tracking-tighter">{activePerson.name}</h2></>}</div>
+                        <div className="flex gap-2 bg-white/50 dark:bg-base-800/50 p-1.5 rounded-2xl border border-white dark:border-base-700 shadow-inner relative"><input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-transparent border-none text-[12px] font-black focus:ring-0 cursor-pointer p-1 min-w-[130px] dark:text-white" /><select value={selectedShift} onChange={e => setSelectedShift(e.target.value as any)} className="bg-transparent border-none text-[10px] font-black focus:ring-0 cursor-pointer p-1 uppercase dark:text-white"><option value="day">Day</option><option value="night">Night</option></select></div>
                     </div>
 
-                    {viewMode === 'detailed' && (
-                        <div className="relative" ref={colSelectorRef}>
-                            <button onClick={() => setIsColSelectorOpen(!isColSelectorOpen)} className="px-4 py-2 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-xl text-sm font-bold text-base-600 dark:text-base-300 shadow-sm hover:bg-base-50 transition-all flex items-center gap-2">
-                                <span>Columns</span> <ChevronDownIcon className={`h-4 w-4 transition-transform ${isColSelectorOpen ? 'rotate-180' : ''}`}/>
-                            </button>
-                            {isColSelectorOpen && (
-                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-xl shadow-xl z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in">
-                                    {ALL_COLUMNS.map(col => (
-                                        <label key={col} className="flex items-center gap-3 p-2 hover:bg-base-50 dark:hover:bg-base-700 rounded-lg cursor-pointer">
-                                            <input type="checkbox" checked={visibleColumns.has(col)} onChange={e => { const newSet = new Set(visibleColumns); if (e.target.checked) newSet.add(col); else newSet.delete(col); setVisibleColumns(newSet); }} className="rounded text-primary-600 focus:ring-primary-500" />
-                                            <span className="text-sm font-medium text-base-700 dark:text-base-300">{col}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-6">
+                        {!activePerson ? (
+                            <div className="h-full flex flex-col items-center justify-center opacity-10 py-20 text-center"><BeakerIcon className="h-20 w-20 mb-4" /><p className="text-lg font-black uppercase tracking-[0.4em]">Select Personnel</p></div>
+                        ) : (
+                            <>
+                                {groupedPrepTasks.length > 0 && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2 ml-1"><div className="w-2 h-2 rounded-full bg-amber-500"></div><h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Preparation Duty</h4></div>
+                                        {groupedPrepTasks.map(group => (
+                                            <div key={group.requestId} className="bg-amber-50/20 dark:bg-amber-900/10 rounded-[1.5rem] border-2 border-amber-100 dark:border-amber-900/30 overflow-hidden shadow-sm">
+                                                <div className="px-6 py-2.5 bg-amber-900 text-white border-b-2 border-amber-800 flex justify-between items-center"><span className="text-[12px] font-black uppercase tracking-widest">SEQUENCE: {group.requestId}</span></div>
+                                                <div className="p-2 space-y-1.5">
+                                                    {group.items.map((item, idx) => {
+                                                        const desc = String(getTaskValue(item.task, 'Description') || 'Task').trim();
+                                                        const qty = String(getTaskValue(item.task, 'Quantity') || '1').trim();
+                                                        const variant = String(getTaskValue(item.task, 'Variant') || '').trim();
+                                                        const sampleName = String(getTaskValue(item.task, 'Sample Name') || '').trim();
+                                                        const isLong = desc.length > 50;
+                                                        
+                                                        return (
+                                                            <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-base-800/60 rounded-[1rem] border border-amber-100 dark:border-amber-900/20 shadow-sm">
+                                                                <div className="flex-grow min-w-0 flex flex-row items-center gap-4">
+                                                                    <div className={`flex-grow font-black uppercase leading-[1.2] line-clamp-2 text-base-950 dark:text-base-100 ${isLong ? 'text-[12px]' : 'text-[14px]'}`}>
+                                                                        {desc}
+                                                                    </div>
+                                                                    <div className="flex flex-shrink-0 items-center gap-2">
+                                                                        <div className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-[10px] font-black text-amber-800 border border-amber-200 flex-shrink-0">x{qty}</div>
+                                                                        {sampleName && sampleName !== 'N/A' && <div className="px-2 py-0.5 bg-base-100 dark:bg-base-700/50 rounded-lg text-[10px] font-black text-base-800 dark:text-base-200 border border-base-200 dark:border-base-600 uppercase truncate max-w-[200px]">S: {sampleName}</div>}
+                                                                        {variant && <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 italic uppercase flex-shrink-0">D: {variant}</div>}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex-shrink-0 ml-4">{item.task.preparationStatus === 'Prepared' || item.task.preparationStatus === 'Ready for Testing' ? <div className="text-emerald-700 font-black text-[10px] uppercase tracking-widest px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm">Ready</div> : <button onClick={() => handleMarkPrepared(item.sourceGroup, item.index)} className="px-6 py-1.5 bg-amber-500 text-white font-black rounded-xl shadow-lg uppercase text-[9px] tracking-widest hover:bg-amber-600 transition-all active:scale-95">Mark Prepared</button>}</div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {groupedPersonTasks.length > 0 && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 ml-1"><div className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></div><h4 className="text-[10px] font-black text-primary-600 uppercase tracking-widest">Active Execution</h4></div>
+                                        {groupedPersonTasks.map(group => (
+                                            <div key={group.requestId} className="bg-white/60 dark:bg-base-950/40 rounded-[1.5rem] border-2 border-base-200 dark:border-base-800 overflow-hidden shadow-md">
+                                                <div className="px-6 py-2.5 bg-base-900 text-white border-b-2 border-base-800 flex justify-between items-center"><span className="text-[12px] font-black uppercase tracking-widest">SEQUENCE: {group.requestId}</span></div>
+                                                <div className="p-2 space-y-2">
+                                                    {group.items.map((item, idx) => {
+                                                        const isDone = item.task.status === TaskStatus.Done;
+                                                        const desc = String(getTaskValue(item.task, 'Description') || 'Task').trim();
+                                                        const qty = String(getTaskValue(item.task, 'Quantity') || '1').trim();
+                                                        const variant = String(getTaskValue(item.task, 'Variant') || '').trim();
+                                                        const sampleName = String(getTaskValue(item.task, 'Sample Name') || '').trim();
+                                                        const isLong = desc.length > 50;
+
+                                                        return (
+                                                            <div key={idx} className={`p-3.5 rounded-[1.2rem] border-2 transition-all duration-300 flex items-center justify-between gap-4 ${isDone ? 'bg-emerald-50/40 border-emerald-100 shadow-sm' : 'bg-white dark:bg-base-900 border-base-100 dark:border-base-700 shadow-lg hover:border-primary-200'}`}>
+                                                                <div className="flex-grow min-w-0 flex flex-row items-center gap-4">
+                                                                    <div className={`flex-grow font-black uppercase leading-[1.2] line-clamp-2 ${isDone ? 'text-emerald-800 opacity-60' : 'text-base-950 dark:text-base-100'} ${isLong ? 'text-[12px]' : 'text-[14px]'}`}>
+                                                                        {desc}
+                                                                    </div>
+                                                                    <div className="flex flex-shrink-0 items-center gap-2">
+                                                                        <div className={`px-2 py-0.5 rounded-lg text-[10px] font-black border flex-shrink-0 ${isDone ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>x{qty}</div>
+                                                                        {sampleName && sampleName !== 'N/A' && <div className={`px-2 py-0.5 rounded-lg text-[10px] font-black border uppercase truncate max-w-[220px] flex-shrink-0 ${isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700/50' : 'bg-indigo-100/30 border-indigo-100 text-indigo-950 dark:text-indigo-200'}`}>S: {sampleName}</div>}
+                                                                        {variant && <div className={`text-[10px] font-black uppercase italic flex-shrink-0 ${isDone ? 'text-emerald-600/40' : 'text-primary-600 dark:text-primary-400 opacity-90'}`}>D: {variant}</div>}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-row items-center gap-2 flex-shrink-0 ml-4">
+                                                                    {!isDone ? <button onClick={() => handleUpdateStatus(item.sourceGroup, item.index, TaskStatus.Done)} className="px-6 sm:px-8 py-2 bg-emerald-600 text-white font-black rounded-xl shadow-lg uppercase tracking-widest text-[10px] hover:bg-emerald-700 hover:shadow-emerald-200 transition-all active:scale-95">Verify</button> : <button onClick={() => handleUpdateStatus(item.sourceGroup, item.index, TaskStatus.Pending)} className="px-3 sm:px-4 py-1.5 bg-base-100 dark:bg-base-800 text-[9px] font-black uppercase text-base-700 dark:text-base-300 rounded-xl transition-all flex items-center gap-2 border border-base-200 dark:border-base-700 shadow-sm"><RefreshIcon className="h-3 w-3" /> Reset</button>}
+                                                                    <div className="flex gap-1.5 ml-1 sm:ml-2"><button onClick={() => handleCorrectionReturn(item.sourceGroup, item.index)} className="p-2 bg-white dark:bg-base-800 text-base-400 hover:text-primary-600 hover:border-primary-400 rounded-xl border-2 border-base-100 dark:border-base-700 transition-all shadow-sm"><ArrowUturnLeftIcon className="h-4 w-4" /></button><button onClick={() => handleTesterReturn(item.sourceGroup, item.index)} className="p-2 bg-white dark:bg-base-800 text-base-400 hover:text-rose-600 hover:border-rose-400 rounded-xl border-2 border-base-100 dark:border-base-700 transition-all shadow-sm"><AlertTriangleIcon className="h-4 w-4" /></button></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
-
-            <div className="flex-grow min-h-0 overflow-y-auto custom-scrollbar rounded-2xl border border-base-200 dark:border-base-700 bg-white dark:bg-base-800 p-4">
-                {isLoading ? (
-                    <div className="flex flex-col items-center justify-center h-full text-base-400 gap-4">
-                        <div className="animate-spin w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full"></div>
-                        <p className="font-medium">Loading schedule data...</p>
-                    </div>
-                ) : error ? (
-                    <div className="flex items-center justify-center h-full text-red-500 font-bold">{error}</div>
-                ) : viewMode === 'summary' ? (
-                    <SummaryView data={summaryData} />
-                ) : (
-                    <DetailedView 
-                        data={detailedData} 
-                        onStatusChange={handleStatusChange} 
-                        onReturn={handleReturnTask} 
-                        onPlannerUnassign={handlePlannerUnassign}
-                        onMarkPrepared={handleMarkItemAsPrepared}
-                        onNoteChange={handleNoteChange}
-                        visibleColumns={visibleColumns}
-                        expandedSections={expandedSections}
-                        toggleSection={toggleSection}
-                    />
-                )}
-            </div>
-            
-            <ReasonPromptModal prompt={reasonPrompt} onClose={() => setReasonPrompt(null)} onSubmit={handleReasonSubmit} />
         </div>
     );
 };

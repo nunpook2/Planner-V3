@@ -1,9 +1,8 @@
-
 import React, { useState, useCallback } from 'react';
 import type { RawTask, GroupedTask } from '../types';
 import { TaskCategory } from '../types';
 import { addCategorizedTask } from '../services/dataService';
-import { ChevronDownIcon, UploadIcon } from './common/Icons';
+import { ChevronDownIcon, UploadIcon, DownloadIcon } from './common/Icons';
 
 declare const XLSX: any;
 
@@ -154,12 +153,28 @@ const ImportTab: React.FC<ImportTabProps> = ({ onTasksUpdated }) => {
             console.error(`Error moving task to ${category}:`, error);
         }
     };
+
+    const handleExport = () => {
+        if (groupedTasks.length === 0) return;
+        const data = groupedTasks.flatMap(gt => gt.tasks);
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Processed Data");
+        XLSX.writeFile(wb, `ProcessedImport_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
     
     return (
         <div className="space-y-8 animate-slide-in-up">
-            <div>
-                <h2 className="text-2xl font-bold text-base-800 dark:text-base-200">1. Import & Process Data</h2>
-                <p className="text-base-500 mt-1">Select an Excel file, choose columns to exclude, and process the data.</p>
+            <div className="flex justify-between items-start">
+                <div>
+                    <h2 className="text-2xl font-bold text-base-800 dark:text-base-200">1. Import & Process Data</h2>
+                    <p className="text-base-500 mt-1">Select an Excel file, choose columns to exclude, and process the data.</p>
+                </div>
+                {groupedTasks.length > 0 && (
+                    <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-base-50 transition-all shadow-sm">
+                        <DownloadIcon className="h-4 w-4" /> Export Processed
+                    </button>
+                )}
             </div>
             
             <div className="p-6 border-2 border-dashed border-base-300 dark:border-base-600 rounded-xl text-center bg-base-50 dark:bg-base-800/50 transition-colors hover:border-primary-400 dark:hover:border-primary-500">
@@ -188,7 +203,6 @@ const ImportTab: React.FC<ImportTabProps> = ({ onTasksUpdated }) => {
                             </button>
                         ))}
                     </div>
-                     {/* FIXED: Changed from secondary-500/600 to primary-600/700 to ensure visibility */}
                      <button onClick={processData} disabled={isProcessing} className="w-full px-4 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 shadow-md">
                         {isProcessing ? 'Processing...' : 'Process Data'}
                     </button>

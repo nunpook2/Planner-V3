@@ -1,8 +1,9 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Tester } from '../types';
 import { getDailySchedule, saveDailySchedule, getExistingScheduleDates } from '../services/dataService';
-import { SunIcon, MoonIcon, UserGroupIcon, CheckCircleIcon, ChevronDownIcon } from './common/Icons';
+import { SunIcon, MoonIcon, UserGroupIcon, CheckCircleIcon, ChevronDownIcon, DownloadIcon } from './common/Icons';
+
+declare const XLSX: any;
 
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
@@ -285,6 +286,15 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
         setTimeout(()=>setSaveStatus('idle'),2000); 
     };
 
+    const handleExport = () => {
+        const dayStaff = [...getPeople(shiftData.dayT), ...getPeople(shiftData.dayA)].map(p => ({ Shift: 'Day', Name: p.name, Role: p.team === 'testers_3_3' ? 'Tester' : 'Assistant' }));
+        const nightStaff = [...getPeople(shiftData.nightT), ...getPeople(shiftData.nightA)].map(p => ({ Shift: 'Night', Name: p.name, Role: p.team === 'testers_3_3' ? 'Tester' : 'Assistant' }));
+        const ws = XLSX.utils.json_to_sheet([...dayStaff, ...nightStaff]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Roster");
+        XLSX.writeFile(wb, `Roster_${selectedDate}.xlsx`);
+    };
+
     const { tTeam, aTeam } = useMemo(() => ({ tTeam: testers.filter(t=>t.team==='testers_3_3'), aTeam: testers.filter(t=>t.team==='assistants_4_2') }), [testers]);
     const getPeople = (ids: Set<string>) => [...ids].map(id=>testers.find(t=>t.id===id)!).filter(Boolean);
 
@@ -295,6 +305,9 @@ const RosterTab: React.FC<{ testers: Tester[]; onTestersUpdate: () => void; }> =
                     <h2 className="text-2xl font-bold text-base-900 dark:text-base-100">Roster Management</h2>
                     <p className="text-sm text-base-500">Plan daily shifts & personnel allocation</p>
                 </div>
+                <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-base-50 transition-all shadow-sm">
+                    <DownloadIcon className="h-4 w-4" /> Export Roster
+                </button>
             </div>
             
             <div className="flex-grow min-h-0 grid grid-cols-1 xl:grid-cols-12 gap-6">

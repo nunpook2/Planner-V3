@@ -80,7 +80,6 @@ export interface AssignedPrepareTask {
 
 export interface ShiftPattern {
     id: 'testers_3_3' | 'assistants_4_2';
-    // Define properties if needed, for now it's just an ID
 }
 
 export interface DailySchedule {
@@ -105,4 +104,16 @@ export interface TestMapping {
     headerGroup: string;
     headerSub: string;
     order?: number;
+}
+
+export interface ShiftReport {
+    id: string; // date_shift e.g., '2023-10-27_day'
+    date: string;
+    shift: 'day' | 'night';
+    instruments: { name: string; status: 'normal' | 'abnormal' }[];
+    infrastructureNote?: string; // Note for abnormal status
+    wasteLevel: 'low' | 'medium' | 'high';
+    cleanliness: 'good' | 'bad';
+    cleanlinessNote: string;
+    cleanlinessImage?: string; // Base64
 }

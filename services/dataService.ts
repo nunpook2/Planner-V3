@@ -1,6 +1,6 @@
 
 import { firestore } from './firebase';
-import type { Tester, CategorizedTask, AssignedTask, DailySchedule, RawTask, AssignedPrepareTask, TestMapping } from '../types';
+import type { Tester, CategorizedTask, AssignedTask, DailySchedule, RawTask, AssignedPrepareTask, TestMapping, ShiftReport } from '../types';
 import { TaskCategory } from '../types';
 
 const getCollection = (collectionName: string) => firestore.collection(collectionName);
@@ -242,6 +242,19 @@ export const unassignTaskToPool = async (categorizedTask: CategorizedTask): Prom
     await getCollection('categorizedTasks').add(payload);
 };
 
+// --- Shift Report Management ---
+export const getShiftReport = async (date: string, shift: 'day' | 'night'): Promise<ShiftReport | null> => {
+    if (!firestore) return null;
+    const docId = `${date}_${shift}`;
+    const doc = await getCollection('shiftReports').doc(docId).get();
+    return doc.exists ? ({ id: doc.id, ...doc.data() } as ShiftReport) : null;
+};
+
+export const saveShiftReport = async (report: ShiftReport): Promise<void> => {
+    const docId = `${report.date}_${report.shift}`;
+    await getCollection('shiftReports').doc(docId).set(report);
+};
+
 // --- BATCH HELPERS ---
 const deleteInBatches = async (refs: any[]) => {
     if (!firestore) throw new Error("Database not initialized");
@@ -271,18 +284,11 @@ export const runCleanup = async () => {
 
 export const clearAllTaskData = async () => {
     if (!firestore) throw new Error("Database not initialized");
-    const collections = ['categorizedTasks', 'assignedTasks', 'assignedPrepareTasks'];
+    const collections = ['categorizedTasks', 'assignedTasks', 'assignedPrepareTasks', 'shiftReports'];
     const refsToDelete: any[] = [];
     for (const colName of collections) {
         const snapshot = await getCollection(colName).get();
         snapshot.forEach((doc: any) => refsToDelete.push(doc.ref));
     }
     if (refsToDelete.length > 0) await deleteInBatches(refsToDelete);
-};
-
-// Helper
-const getTaskValue = (task: RawTask, header: string): string | number => {
-    const lowerCaseHeader = header.toLowerCase().trim();
-    const key = Object.keys(task).find(k => k.toLowerCase().trim() === lowerCaseHeader);
-    return key ? task[key] : '';
 };
