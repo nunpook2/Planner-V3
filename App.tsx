@@ -58,6 +58,10 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<React.ReactNode | null>(null);
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
+    
+    // Global context for date and shift
+    const [globalSelectedDate, setGlobalSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [globalSelectedShift, setGlobalSelectedShift] = useState<'day' | 'night'>('day');
 
     const triggerTaskRefresh = useCallback(() => {
         setTaskRefreshKey(prevKey => prevKey + 1);
@@ -86,10 +90,43 @@ const App: React.FC = () => {
 
         switch (activeTab) {
             case 'import': return <ImportTab onTasksUpdated={triggerTaskRefresh} />;
-            case 'tasks': return <TasksTab testers={testers} refreshKey={taskRefreshKey} />;
-            case 'roster': return <RosterTab testers={testers} onTestersUpdate={fetchTesters} />;
-            case 'schedule': return <ScheduleTab testers={testers} onTasksUpdated={triggerTaskRefresh} />;
-            case 'dashboard': return <DashboardTab testers={testers} />;
+            case 'tasks': return (
+                <TasksTab 
+                    testers={testers} 
+                    refreshKey={taskRefreshKey} 
+                    selectedDate={globalSelectedDate}
+                    onDateChange={setGlobalSelectedDate}
+                    selectedShift={globalSelectedShift}
+                    onShiftChange={setGlobalSelectedShift}
+                />
+            );
+            case 'roster': return (
+                <RosterTab 
+                    testers={testers} 
+                    onTestersUpdate={fetchTesters} 
+                    selectedDate={globalSelectedDate}
+                    onDateChange={setGlobalSelectedDate}
+                />
+            );
+            case 'schedule': return (
+                <ScheduleTab 
+                    testers={testers} 
+                    onTasksUpdated={triggerTaskRefresh} 
+                    selectedDate={globalSelectedDate}
+                    onDateChange={setGlobalSelectedDate}
+                    selectedShift={globalSelectedShift}
+                    onShiftChange={setGlobalSelectedShift}
+                />
+            );
+            case 'dashboard': return (
+                <DashboardTab 
+                    testers={testers} 
+                    selectedDate={globalSelectedDate}
+                    onDateChange={setGlobalSelectedDate}
+                    selectedShift={globalSelectedShift}
+                    onShiftChange={setGlobalSelectedShift}
+                />
+            );
             case 'settings': return <SettingsTab testers={testers} onRefreshTesters={fetchTesters} onTasksUpdated={triggerTaskRefresh} />;
             default: return <ImportTab onTasksUpdated={triggerTaskRefresh} />;
         }

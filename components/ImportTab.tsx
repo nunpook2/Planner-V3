@@ -13,7 +13,7 @@ interface ImportTabProps {
 const VISIBLE_COLUMNS = [
     'Request ID', 'Sample Name', 'Description', 'Variant', 'Note to planer', 
     'Additional Information', 'Remark (Requester)', 'Testing Condition', 
-    'Due finish', 'Priority', 'Purpose', 'SDIDATAID'
+    'Due date', 'Priority', 'Purpose', 'SDIDATAID'
 ];
 
 const formatDate = (dateString: string | number) => {
@@ -268,7 +268,7 @@ const ImportTab: React.FC<ImportTabProps> = ({ onTasksUpdated }) => {
                                                 {groupedTask.tasks.map((task, index) => (
                                                     <tr key={index} className="border-b dark:border-base-600 last:border-b-0 hover:bg-base-50 dark:hover:bg-base-600/50">
                                                         {VISIBLE_COLUMNS.map(h => (
-                                                            <td key={h} className="p-3">{h === 'Due finish' ? formatDate(getTaskValue(task, h)) : String(getTaskValue(task, h) || '')}</td>
+                                                            <td key={h} className="p-3">{h === 'Due date' ? formatDate(getTaskValue(task, h)) : String(getTaskValue(task, h) || '')}</td>
                                                         ))}
                                                     </tr>
                                                 ))}
