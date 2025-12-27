@@ -90,7 +90,7 @@ const LocalModal: React.FC<{
                     {showInput && (
                         <button 
                             onClick={() => onConfirm(val)} 
-                            className={`px-8 py-3.5 text-[11px] font-black text-white rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest ${confirmColor} hover:brightness-110`}
+                            className={`px-8 py-3.5 text-[11px] font-black text-white rounded-2xl shadow-xl transition-all uppercase tracking-widest ${confirmColor} hover:brightness-110`}
                         >
                             {confirmText}
                         </button>
@@ -251,6 +251,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
     };
 
     const handleExport = () => {
+        // --- Sheet 1: General Assignment Log ---
         const executionData = assignedTasks.flatMap(group => 
             group.tasks.map(task => ({
                 'Type': 'Execution',
@@ -278,9 +279,52 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
             }))
         );
         const allData = [...executionData, ...prepData];
-        const ws = XLSX.utils.json_to_sheet(allData);
+
+        // --- Sheet 2: LIMS Integration Format (Exactly as requested by user) ---
+        const formatLimsDate = (dateStr: string) => {
+            if (!dateStr) return '';
+            const [y, m, d] = dateStr.split('-');
+            return `${parseInt(d)}/${parseInt(m)}/${y}`;
+        };
+
+        const integrationHeaderA1 = [["Count of Variant"]];
+        const integrationHeadersRow2 = ["SDIDATAID", "Assign Analyst", "Assign Start date", "Total"];
+        
+        const integrationRows = [
+            ...assignedTasks.flatMap(group => 
+                group.tasks.map(task => [
+                    getTaskValue(task, 'SDIDATAID') || '',
+                    group.testerName,
+                    formatLimsDate(group.assignedDate),
+                    1
+                ])
+            ),
+            ...prepareTasks.flatMap(group => 
+                group.tasks.map(task => [
+                    getTaskValue(task, 'SDIDATAID') || '',
+                    group.assistantName,
+                    formatLimsDate(group.assignedDate),
+                    1
+                ])
+            )
+        ];
+
+        const integrationAOA = [
+            ...integrationHeaderA1,
+            integrationHeadersRow2,
+            ...integrationRows
+        ];
+
+        const ws1 = XLSX.utils.json_to_sheet(allData);
+        const ws2 = XLSX.utils.aoa_to_sheet(integrationAOA);
+        
+        // Basic style: col widths for sheet 2
+        ws2['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 18 }, { wch: 8 }];
+
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Shift Assignments");
+        XLSX.utils.book_append_sheet(wb, ws1, "Shift Assignments");
+        XLSX.utils.book_append_sheet(wb, ws2, "LIMS_Integration");
+        
         XLSX.writeFile(wb, `ShiftAssignments_${selectedDate}_${selectedShift}.xlsx`);
     };
 
@@ -348,7 +392,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                 <button key={tester.id} onClick={() => setActivePersonId(tester.id)} className={`w-full group flex items-center gap-3 p-3 rounded-[1.3rem] transition-all duration-300 border text-left ${isActive ? 'bg-gradient-to-r from-primary-600 to-indigo-600 border-primary-500 text-white shadow-lg active-glow scale-[1.02]' : 'bg-white/40 dark:bg-base-900/40 hover:bg-white dark:hover:bg-base-800 border-transparent hover:border-base-200 dark:hover:border-base-700'}`}>
                                     <div className={`w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center text-[11px] font-black shadow-inner ${isAssistant ? 'person-avatar assistant' : 'person-avatar'} ${isActive ? 'ring-2 ring-white/40' : 'text-white'}`}>{tester.name.substring(0, 2).toUpperCase()}</div>
                                     <div className="flex-grow min-w-0"><span className={`block text-[14px] font-black tracking-tight truncate leading-none ${isActive ? 'text-white' : 'text-base-800 dark:text-base-100'}`}>{tester.name}</span><span className={`text-[8px] font-bold uppercase tracking-widest mt-1 ${isActive ? 'text-white/60' : 'text-base-400'}`}>{isAssistant ? 'Assistant' : 'Analyst'}</span></div>
-                                    {count > 0 && <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${isActive ? 'bg-white text-primary-600 shadow-md' : 'bg-primary-500 text-white'}`}>{count}</div>}
+                                    {count > 0 && <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${isActive ? 'bg-white text-primary-600 shadow-md' : 'bg-primary-50 text-white'}`}>{count}</div>}
                                 </button>
                             );
                         })}

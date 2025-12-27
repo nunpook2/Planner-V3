@@ -92,7 +92,8 @@ const formatDate = (dateValue: any) => {
     if (!date) return '';
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    return `${day}/${month}`;
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
 };
 
 const getDueDateTimestamp = (tasks: RawTask[]): number => {
@@ -211,7 +212,7 @@ const AssignmentModal: React.FC<{ isOpen: boolean; onClose: () => void; onAssign
     return (
         <div className="fixed inset-0 bg-base-900/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={!isProcessing ? onClose : undefined}>
             <div className="bg-white dark:bg-base-800 rounded-2xl shadow-2xl p-6 w-full max-w-lg m-4 space-y-4 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
-                <div className={`h-2 w-20 rounded-full mx-auto mb-2 ${isPreparation ? 'bg-amber-400' : 'bg-primary-500'}`}></div>
+                <div className={`h-2 w-20 rounded-full mx-auto mb-2 ${isPreparation ? 'bg-amber-400' : 'bg-primary-50'}`}></div>
                 <h2 className="text-xl font-black text-base-900 dark:text-base-100 text-center tracking-tight">{isPreparation ? "Assign for Preparation" : "Assign for Testing"}</h2>
                 <p className="text-sm font-bold text-base-600 dark:text-base-400 text-center">Assigning <span className={`font-black ${isPreparation ? 'text-amber-600' : 'text-primary-600'}`}>{selectedItemCount} items</span></p>
                 <div className="border-2 border-base-100 dark:border-base-700 rounded-xl bg-base-50 dark:bg-base-900/50 max-h-[60vh] overflow-y-auto custom-scrollbar">
@@ -240,7 +241,7 @@ const AssignmentModal: React.FC<{ isOpen: boolean; onClose: () => void; onAssign
     );
 };
 
-// --- SEPARATED CELL COMPONENT TO PREVENT TYPING BUG ---
+// --- MAIN GRID CELL COMPONENT ---
 
 const ExpandableCell: React.FC<{ 
     headerKey: string; 
@@ -439,15 +440,20 @@ const ExpandableCell: React.FC<{
 
 // --- MAIN COMPONENT ---
 
-const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ testers, refreshKey }) => {
+const TasksTab: React.FC<{ 
+    testers: Tester[]; 
+    refreshKey: number; 
+    selectedDate: string;
+    onDateChange: (date: string) => void;
+    selectedShift: 'day' | 'night';
+    onShiftChange: (shift: 'day' | 'night') => void;
+}> = ({ testers, refreshKey, selectedDate, onDateChange, selectedShift, onShiftChange }) => {
     const [categorizedTasks, setCategorizedTasks] = useState<CategorizedTask[]>([]);
     const [testMappings, setTestMappings] = useState<TestMapping[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [schedule, setSchedule] = useState<DailySchedule | null>(null);
     const [activeCategory, setActiveCategory] = useState<string>('all');
     const [filterRequestId, setFilterRequestId] = useState('');
-    const [selectedShift, setSelectedShift] = useState<'day' | 'night'>('day');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [isAssigningToPrepare, setIsAssigningToPrepare] = useState(false); 
@@ -541,7 +547,7 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         }> = {};
         
         filteredTasks.forEach(taskGroup => {
-            if (taskGroup.category === TaskCategory.Manual) return; // Grid view doesn't handle manual jobs well
+            if (taskGroup.category === TaskCategory.Manual) return; 
 
             const rid = taskGroup.id;
             if (!mergedRows[rid]) {
@@ -780,7 +786,6 @@ Provide a clear plan in JSON format with two fields:
     }, []);
 
     const handleDeleteManualTaskGroup = async (docId: string) => {
-        // Trigger custom UI confirmation instead of blocked native confirm()
         setDeleteConfirmId(docId);
     };
 
@@ -800,22 +805,80 @@ Provide a clear plan in JSON format with two fields:
     const totalSelectedCount = useMemo(() => Object.values(selectedItems).reduce((acc: number, set: Set<number>) => acc + set.size, 0), [selectedItems]);
 
     const handleExport = () => {
-        const dataToExport = categorizedTasks.flatMap(group => 
-            group.tasks.map(task => ({
-                'Request ID': group.id,
-                'Category': group.category,
-                'Sample Name': getTaskValue(task, 'Sample Name'),
-                'Description': getTaskValue(task, 'Description'),
-                'Variant': getTaskValue(task, 'Variant'),
-                'Quantity': getTaskValue(task, 'Quantity'),
-                'Due date': formatDate(getTaskValue(task, 'due date')),
-                'Planner Note': task.plannerNote || ''
-            }))
-        );
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        if (gridData.length === 0) return;
+
+        // Matrix Header Rows
+        const headerRow1 = ["Due Date", "Request ID", "Special Status"];
+        const headerRow2 = ["", "", ""];
+
+        activeGridHeaders.forEach(([group, subKeys]) => {
+            headerRow1.push(group);
+            for (let i = 1; i < subKeys.length; i++) headerRow1.push(""); // Merge placeholders
+            subKeys.forEach(key => headerRow2.push(key.split('|')[1]));
+        });
+        headerRow1.push("Unmapped");
+        headerRow2.push("");
+
+        // Build Data Rows
+        const rows = gridData.map(row => {
+            const dueDateStr = row.minDueDate === Infinity ? "N/A" : formatDate(row.minDueDate);
+            const specialStatus = [
+                row.isSprint ? "SPRINT" : "",
+                row.isUrgent ? "URGENT" : "",
+                row.isLSP ? "LSP" : "",
+                row.isPoCat ? "POCAT" : ""
+            ].filter(Boolean).join(", ");
+
+            const matrixRow = [dueDateStr, row.requestId, specialStatus];
+
+            activeColumnKeys.forEach(headerKey => {
+                const items = row.cells[headerKey] || [];
+                matrixRow.push(items.length > 0 ? items.length : "");
+            });
+
+            matrixRow.push(row.unmappedItems.length > 0 ? row.unmappedItems.length : "");
+            return matrixRow;
+        });
+
+        // Combine into Matrix AOA
+        const aoa = [headerRow1, headerRow2, ...rows];
+
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+        // Simple Styling/Layout through worksheet properties
+        const colWidths = [
+            { wch: 12 }, // Due Date
+            { wch: 18 }, // Request ID
+            { wch: 20 }, // Status
+            ...activeColumnKeys.map(() => ({ wch: 8 })),
+            { wch: 12 }  // Unmapped
+        ];
+        ws['!cols'] = colWidths;
+
+        // Auto-merges for Group Headers
+        const merges: any[] = [];
+        let currentColIndex = 3; // Starting after Due, ID, Status
+        activeGridHeaders.forEach(([group, subKeys]) => {
+            if (subKeys.length > 1) {
+                merges.push({
+                    s: { r: 0, c: currentColIndex },
+                    e: { r: 0, c: currentColIndex + subKeys.length - 1 }
+                });
+            }
+            currentColIndex += subKeys.length;
+        });
+
+        // Vertical Merges for Static Columns
+        merges.push({ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }); // Due Date
+        merges.push({ s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }); // ID
+        merges.push({ s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }); // Status
+        merges.push({ s: { r: 0, c: aoa[0].length - 1 }, e: { r: 1, c: aoa[0].length - 1 } }); // Unmapped
+
+        ws['!merges'] = merges;
+
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Task Queue");
-        XLSX.writeFile(wb, `TaskQueue_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "Task Assignment Grid");
+        XLSX.writeFile(wb, `TaskGrid_${selectedDate}.xlsx`);
     };
 
     const handleUpdatePlannerNote = async (docId: string, itemIndex: number, note: string) => {
@@ -855,7 +918,7 @@ Provide a clear plan in JSON format with two fields:
             {/* Custom Delete Confirmation Modal */}
             {deleteConfirmId && (
                 <div className="fixed inset-0 bg-base-900/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-fade-in" onClick={() => setDeleteConfirmId(null)}>
-                    <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-w-sm m-4 space-y-6 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-sm m-4 space-y-6 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
                         <div className="text-center space-y-4">
                             <div className="mx-auto w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center">
                                 <TrashIcon className="h-8 w-8 text-red-500" />
@@ -968,8 +1031,8 @@ Provide a clear plan in JSON format with two fields:
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t-2 border-base-100 dark:border-base-700 pt-5">
                         <input type="text" placeholder="Search by Request ID (2512XXXX)..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 focus:bg-white focus:border-primary-500 transition-all text-[15px] font-black tracking-tight placeholder:text-base-400 outline-none"/>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all font-black text-[15px] outline-none"/>
-                        <select value={selectedShift} onChange={e => setSelectedShift(e.target.value as any)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl font-black text-[15px] uppercase tracking-widest cursor-pointer outline-none transition-all"><option value="day">Day Shift (08:00)</option><option value="night">Night Shift (20:00)</option></select>
+                        <input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all font-black text-[15px] outline-none"/>
+                        <select value={selectedShift} onChange={e => onShiftChange(e.target.value as any)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl font-black text-[15px] uppercase tracking-widest cursor-pointer outline-none transition-all"><option value="day">Day Shift (08:00)</option><option value="night">Night Shift (20:00)</option></select>
                     </div>
                 </div>
                 <div className="p-4 bg-primary-800 rounded-3xl flex justify-between items-center shadow-2xl sticky top-0 z-30 ring-4 ring-primary-500/20">
@@ -988,7 +1051,6 @@ Provide a clear plan in JSON format with two fields:
                         Syncing Deployment Grid...
                     </div>
                  ) : activeCategory === TaskCategory.Manual ? (
-                     /* REDESIGNED MANUAL VIEW: List-based logic */
                      <div className="overflow-auto flex-grow custom-scrollbar p-6 bg-base-50 dark:bg-base-950">
                         <div className="max-w-4xl mx-auto space-y-4">
                             <div className="flex items-center justify-between mb-2">
@@ -1008,7 +1070,6 @@ Provide a clear plan in JSON format with two fields:
                             ) : (
                                 <div className="space-y-3">
                                     {manualTasks.map(group => {
-                                        // Manual task groups only have 1 item in the tasks array usually
                                         const task = group.tasks[0];
                                         const isSelected = selectedItems[group.docId!]?.has(0);
                                         const isPrepAwaiting = task.preparationStatus === 'Awaiting Preparation';
@@ -1062,13 +1123,12 @@ Provide a clear plan in JSON format with two fields:
                         </div>
                      </div>
                  ) : (
-                    /* STANDARD GRID VIEW */
                     <div className="overflow-auto flex-grow custom-scrollbar">
                         <table className="min-w-full text-xs text-left border-collapse border-spacing-0 table-fixed">
                             <thead className="bg-slate-900 text-white sticky top-0 z-40">
                                 <tr>
                                     <th rowSpan={2} style={{ width: `${COL_DUE_WIDTH}px`, minWidth: `${COL_DUE_WIDTH}px` }} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 bg-slate-900 sticky left-0 z-[60] text-center text-slate-300">Due</th>
-                                    <th rowSpan={2} style={{ width: `${COL_RID_WIDTH}px`, minWidth: `${COL_RID_WIDTH}px` }} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 bg-slate-900 sticky left-[80px] z-[60] text-center text-slate-300">Request ID & Special Status</th>
+                                    <th rowSpan={2} style={{ width: `${COL_RID_WIDTH}px`, minWidth: `${COL_RID_WIDTH}px` }} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 bg-slate-900 sticky left-[80px] z-[60] text-center text-slate-300">Request ID & Status</th>
                                     {activeGridHeaders.map(([group, subKeys], i) => {
                                         const theme = HEADER_THEMES[i % HEADER_THEMES.length];
                                         return <th key={group} colSpan={subKeys.length} className={`px-4 py-3.5 font-black text-[13px] text-center border-b border-r border-white/10 uppercase tracking-[0.25em] ${theme.headerBg} ${theme.headerText} shadow-inner`}>{group}</th>;
