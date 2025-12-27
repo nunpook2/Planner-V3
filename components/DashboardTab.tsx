@@ -353,27 +353,27 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                                 <div key={idx} className={`rounded-[1.8rem] border-2 overflow-hidden transition-all duration-300 shadow-lg ${isComplete ? 'bg-emerald-50/10 border-emerald-100/50' : hasError ? 'bg-white dark:bg-base-800 border-red-200' : 'bg-white dark:bg-base-800 border-base-200 dark:border-base-700'}`}>
                                                     <button 
                                                         onClick={() => toggleGroup(sum.desc)}
-                                                        className={`w-full text-left px-6 py-4 border-b-2 flex justify-between items-center transition-colors ${isComplete ? 'bg-emerald-50/40 hover:bg-emerald-100/40' : hasError ? 'bg-red-50/40 hover:bg-red-100/40' : 'bg-base-50/50 hover:bg-base-100/50'}`}
+                                                        className={`w-full text-left px-6 py-4 border-b-2 flex justify-between items-start transition-colors ${isComplete ? 'bg-emerald-50/40 hover:bg-emerald-100/40' : hasError ? 'bg-red-50/40 hover:bg-red-100/40' : 'bg-base-50/50 hover:bg-base-100/50'}`}
                                                     >
-                                                        <div className="min-w-0 pr-4 flex items-center gap-4">
-                                                            <ChevronDownIcon className={`h-5 w-5 text-base-400 transition-transform duration-300 ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
+                                                        <div className="min-w-0 pr-4 flex items-start gap-4">
+                                                            <ChevronDownIcon className={`h-5 w-5 mt-1.5 text-base-400 transition-transform duration-300 ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
                                                             <div>
-                                                                <div className="flex gap-2 mb-1.5">
+                                                                <div className="flex flex-wrap gap-2 mb-2 mt-1">
                                                                     {sum.isSprint && <span className="bg-red-600 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">SPRINT</span>}
                                                                     {sum.isUrgent && <span className="bg-rose-500 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">URGENT</span>}
                                                                     {sum.isManual && <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">MANUAL</span>}
                                                                 </div>
-                                                                <h3 className={`text-[16px] font-black tracking-tight truncate uppercase transition-colors ${isComplete ? 'text-emerald-900 opacity-60' : 'text-base-950 dark:text-white'}`}>{sum.desc}</h3>
+                                                                <h3 className={`text-[16px] font-black tracking-tight uppercase whitespace-normal leading-tight transition-colors ${isComplete ? 'text-emerald-900 opacity-60' : 'text-base-950 dark:text-white'}`}>{sum.desc}</h3>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-8 flex-shrink-0">
+                                                        <div className="flex items-center gap-6 flex-shrink-0 mt-1">
                                                             <div className="flex flex-col items-end">
                                                                 <span className={`text-[24px] font-black tracking-tighter leading-none ${isComplete ? 'text-emerald-700' : hasError ? 'text-red-700' : 'text-primary-700'}`}>
                                                                     {sum.done}<span className="text-base-300 mx-1 font-normal text-lg">/</span>{sum.total}
                                                                 </span>
                                                                 {isComplete && <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mt-1 opacity-80">Mission: OK</span>}
                                                             </div>
-                                                            <div className="w-24 h-2 bg-base-100 dark:bg-base-700 rounded-full overflow-hidden shadow-inner ring-1 ring-black/5">
+                                                            <div className="w-24 h-2 bg-base-100 dark:bg-base-700 rounded-full overflow-hidden shadow-inner ring-1 ring-black/5 hidden sm:block">
                                                                 <div className={`h-full transition-all duration-700 ${isComplete ? 'bg-emerald-500' : hasError ? 'bg-red-500' : 'bg-primary-500'}`} style={{width: `${(sum.done/sum.total)*100}%`}}></div>
                                                             </div>
                                                         </div>
@@ -382,22 +382,24 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                                     {isExpanded && (
                                                         <div className="p-2 space-y-1.5 bg-white/30 dark:bg-base-900/20 animate-fade-in">
                                                             {sum.samples.map((s, si) => (
-                                                                <div key={si} className="flex items-center justify-between px-6 py-4 bg-white dark:bg-base-900/40 rounded-[1.3rem] border border-base-100 dark:border-base-800 hover:bg-primary-50/30 dark:hover:bg-base-800 transition-colors shadow-sm">
-                                                                    <div className="flex items-center gap-6 flex-grow min-w-0">
-                                                                        <span className="text-[14px] font-black text-base-950 dark:text-base-100 truncate uppercase min-w-[180px] tracking-tight">{s.name}</span>
-                                                                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-[10px] font-black flex-shrink-0">x{s.qty}</span>
-                                                                        <span className="text-[11px] font-extrabold text-base-800 dark:text-base-400 truncate uppercase flex items-center gap-1.5"><span className="text-primary-600 opacity-50 font-black">D:</span> {s.detail}</span>
+                                                                <div key={si} className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-4 bg-white dark:bg-base-900/40 rounded-[1.3rem] border border-base-100 dark:border-base-800 hover:bg-primary-50/30 dark:hover:bg-base-800 transition-colors shadow-sm gap-4">
+                                                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 flex-grow min-w-0 w-full">
+                                                                        <span className="text-[14px] font-black text-base-950 dark:text-base-100 uppercase tracking-tight whitespace-normal leading-tight min-w-0 sm:min-w-[180px]">{s.name}</span>
+                                                                        <div className="flex items-center gap-3 shrink-0">
+                                                                            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-[10px] font-black">x{s.qty}</span>
+                                                                            <span className="text-[11px] font-extrabold text-base-800 dark:text-base-400 uppercase flex items-center gap-1.5"><span className="text-primary-600 opacity-50 font-black">D:</span> {s.detail}</span>
+                                                                        </div>
                                                                         
                                                                         {s.reason && (
-                                                                            <div className="flex items-center gap-2.5 px-4 py-2 bg-red-700 text-white rounded-[12px] ml-auto issue-badge-premium border border-red-500 shrink-0 shadow-lg">
-                                                                                <AlertTriangleIcon className="h-4 w-4" />
-                                                                                <span className="text-[12px] font-black uppercase tracking-tight leading-none">
+                                                                            <div className="flex items-center gap-2.5 px-4 py-2 bg-red-700 text-white rounded-[12px] sm:ml-auto issue-badge-premium border border-red-500 shrink-0 shadow-lg w-full sm:w-auto">
+                                                                                <AlertTriangleIcon className="h-4 w-4 shrink-0" />
+                                                                                <span className="text-[11px] font-black uppercase tracking-tight leading-none whitespace-normal">
                                                                                     Issue: {s.reason}
                                                                                 </span>
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest flex-shrink-0 ml-8 shadow-sm ${s.status === 'done' ? 'bg-emerald-600 text-white' : s.status === 'failed' ? 'bg-red-600 text-white' : 'bg-base-200 dark:bg-base-700 text-base-600'}`}>{s.status}</span>
+                                                                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm self-end sm:self-auto ${s.status === 'done' ? 'bg-emerald-600 text-white' : s.status === 'failed' ? 'bg-red-600 text-white' : 'bg-base-200 dark:bg-base-700 text-base-600'}`}>{s.status}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -519,7 +521,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
 
             {notification && (
                 <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 px-10 py-5 rounded-[2.5rem] shadow-2xl z-[200] animate-slide-in-up flex items-center gap-4 border-2 backdrop-blur-3xl ${notification.isError ? 'bg-red-600 border-red-400 text-white' : 'bg-emerald-600 border-emerald-400 text-white'}`}>
-                    <CheckCircleIcon className="h-6 w-6"/><span className="font-black text-sm uppercase tracking-widest">{notification.message}</span>
+                    <CheckCircleIcon className="h-5 w-5"/><span className="font-black text-sm uppercase tracking-widest">{notification.message}</span>
                 </div>
             )}
         </div>

@@ -1,4 +1,6 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { GoogleGenAI, Type } from "@google/genai";
 import type { Tester, CategorizedTask, DailySchedule, RawTask, AssignedTask, TestMapping } from '../types';
 import { TaskCategory, TaskStatus } from '../types';
 import { 
@@ -8,9 +10,10 @@ import {
     deleteCategorizedTask, 
     updateCategorizedTask,
     assignItemsToPrepare,
-    getTestMappings
+    getTestMappings,
+    addCategorizedTask as saveCategorizedTask
 } from '../services/dataService';
-import { CheckCircleIcon, ChevronDownIcon, TrashIcon, AlertTriangleIcon, RefreshIcon, PlusIcon, DragHandleIcon, DownloadIcon, ArrowUturnLeftIcon, ChatBubbleLeftEllipsisIcon } from './common/Icons';
+import { CheckCircleIcon, ChevronDownIcon, TrashIcon, AlertTriangleIcon, RefreshIcon, PlusIcon, DragHandleIcon, DownloadIcon, ArrowUturnLeftIcon, ChatBubbleLeftEllipsisIcon, SparklesIcon, XCircleIcon, BeakerIcon } from './common/Icons';
 
 declare const XLSX: any;
 
@@ -23,6 +26,10 @@ const HEADER_THEMES = [
     { name: 'Cyan', headerBg: 'bg-cyan-700', headerText: 'text-white', borderColor: 'border-cyan-500', subHeaderBg: 'bg-cyan-100 dark:bg-cyan-900', subHeaderText: 'text-cyan-950 dark:text-cyan-50' },
     { name: 'Violet', headerBg: 'bg-violet-700', headerText: 'text-white', borderColor: 'border-violet-500', subHeaderBg: 'bg-violet-100 dark:bg-violet-900', subHeaderText: 'text-violet-950 dark:text-violet-50' },
 ];
+
+// --- CONSTANTS FOR LAYOUT ---
+const COL_DUE_WIDTH = 80;
+const COL_RID_WIDTH = 200; 
 
 // --- UTILITY FUNCTIONS ---
 
@@ -131,6 +138,70 @@ const Toast: React.FC<{ message: string; isError?: boolean; onDismiss: () => voi
         <div className={`fixed top-24 right-8 py-3 px-6 rounded-xl shadow-lg flex items-center gap-3 animate-fade-in z-[60] border ${isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
             {isError ? <AlertTriangleIcon className="h-5 w-5" /> : <CheckCircleIcon className="h-5 w-5" />}
             <span className="font-bold text-sm">{message}</span>
+        </div>
+    );
+};
+
+const ManualTaskModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (task: { jobId: string; description: string; quantity: string }) => void; isProcessing: boolean }> = ({ isOpen, onClose, onSave, isProcessing }) => {
+    const [jobId, setJobId] = useState('');
+    const [description, setDescription] = useState('');
+    const [quantity, setQuantity] = useState('1');
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-base-900/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={!isProcessing ? onClose : undefined}>
+            <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-w-md m-4 space-y-5 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-4 mb-2">
+                    <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600">
+                        <PlusIcon className="h-6 w-6" />
+                    </div>
+                    <h2 className="text-2xl font-black text-base-900 dark:text-base-100 tracking-tighter">Add Manual Task</h2>
+                </div>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Job Number / เลขงาน</label>
+                        <input 
+                            type="text" 
+                            value={jobId} 
+                            onChange={e => setJobId(e.target.value)} 
+                            placeholder="M-2024-XXX"
+                            className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-sm transition-all"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Description / รายละเอียดงาน</label>
+                        <textarea 
+                            value={description} 
+                            onChange={e => setDescription(e.target.value)} 
+                            placeholder="e.g. Clean glassware, help sample prep..."
+                            rows={3}
+                            className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-sm transition-all resize-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Quantity / จำนวน</label>
+                        <input 
+                            type="text" 
+                            value={quantity} 
+                            onChange={e => setQuantity(e.target.value)} 
+                            className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-sm transition-all"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4">
+                    <button onClick={onClose} disabled={isProcessing} className="px-6 py-3 text-[11px] font-black text-base-400 hover:text-base-800 dark:hover:text-white uppercase tracking-widest transition-colors">Cancel</button>
+                    <button 
+                        onClick={() => onSave({ jobId, description, quantity })} 
+                        disabled={isProcessing || !jobId.trim() || !description.trim()}
+                        className="px-8 py-3.5 bg-primary-600 text-white font-black rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all uppercase tracking-widest text-[11px] disabled:opacity-50"
+                    >
+                        {isProcessing ? 'Saving...' : 'Create Task'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
@@ -378,13 +449,26 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
     const [filterRequestId, setFilterRequestId] = useState('');
     const [selectedShift, setSelectedShift] = useState<'day' | 'night'>('day');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [isAssigningToPrepare, setIsAssigningToPrepare] = useState(false); 
     const [notification, setNotification] = useState<{message: string, isError?: boolean} | null>(null);
     const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
     const [expandedCell, setExpandedCell] = useState<{ docId: string; headerKey: string } | null>(null);
     const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
     const [isAssigning, setIsAssigning] = useState(false);
+    const [isSavingManual, setIsSavingManual] = useState(false);
     const [noteEditor, setNoteEditor] = useState<{ docId: string, index: number, text: string } | null>(null);
+    
+    // Custom Confirmation State
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+    // AI States
+    const [isAIGenerating, setIsAIGenerating] = useState(false);
+    const [aiRecommendation, setAIRecommendation] = useState<{
+        reasoning: string;
+        plan: Array<{ personName: string; requestId: string; taskDescription: string }>;
+    } | null>(null);
+    const [isAISidebarOpen, setIsAISidebarOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
@@ -432,7 +516,14 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
 
     const filteredTasks = useMemo(() => {
         return categorizedTasks.filter(task => {
-            if (task.category === TaskCategory.Manual) return activeCategory === TaskCategory.Manual;
+            // EXCLUSION LOGIC: Exclude ANY task group that has been returned from Shift Tracking
+            if (task.isReturnedPool === true) return false;
+            // Additional safety for cleaned/unassigned tasks from Planner
+            if (task.returnedBy || task.returnReason) return false;
+            // Also check individual tasks within the group for returned flags
+            if (task.tasks.some(t => t.isReturned === true)) return false;
+
+            if (task.category === TaskCategory.Manual) return activeCategory === 'all' || activeCategory === TaskCategory.Manual;
             const categoryMatch = activeCategory === 'all' || task.category === activeCategory;
             const idMatch = filterRequestId === '' || task.id.toLowerCase().includes(filterRequestId.toLowerCase());
             return categoryMatch && idMatch; 
@@ -450,6 +541,8 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         }> = {};
         
         filteredTasks.forEach(taskGroup => {
+            if (taskGroup.category === TaskCategory.Manual) return; // Grid view doesn't handle manual jobs well
+
             const rid = taskGroup.id;
             if (!mergedRows[rid]) {
                 mergedRows[rid] = { 
@@ -486,6 +579,11 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         return Object.values(mergedRows).sort((a, b) => a.minDueDate - b.minDueDate);
     }, [filteredTasks, testMappings]);
 
+    // Manual Tasks specific data processing
+    const manualTasks = useMemo(() => {
+        return filteredTasks.filter(t => t.category === TaskCategory.Manual);
+    }, [filteredTasks]);
+
     const activeColumnKeys = useMemo(() => {
         if (!hideEmptyColumns) return gridHeaders.flatMap(([, subKeys]) => subKeys);
         const activeKeys = new Set<string>();
@@ -511,6 +609,110 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         return { testers: findByIds(shiftTesters), assistants: findByIds(shiftAssistants) };
     }, [schedule, testers, selectedShift]);
 
+    // --- AI LOGIC ---
+    const generateAIPlan = async () => {
+        if (isAIGenerating) return;
+        setIsAIGenerating(true);
+        setAIRecommendation(null);
+        setIsAISidebarOpen(true);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const taskSummary = categorizedTasks.map(group => ({
+                id: group.id,
+                category: group.category,
+                tasks: group.tasks.map(t => ({
+                    desc: getTaskValue(t, 'description'),
+                    qty: getTaskValue(t, 'quantity'),
+                    urgent: getSpecialStatus(t, group.category).isUrgent,
+                    sprint: getSpecialStatus(t, group.category).isSprint
+                }))
+            }));
+
+            const staffList = onShiftPersonnel.testers.map(p => p.name);
+
+            const prompt = `You are an expert Laboratory Operations Manager. 
+Analyze the following queue of laboratory tasks and available personnel for the current shift. 
+Create an optimal assignment plan that prioritizes urgent/sprint tasks while balancing the workload across staff members.
+
+Current Tasks in Queue:
+${JSON.stringify(taskSummary, null, 2)}
+
+Available Analysts:
+${staffList.join(', ')}
+
+Provide a clear plan in JSON format with two fields: 
+1. "reasoning": a string explaining your strategy.
+2. "plan": an array of objects with "personName", "requestId", and "taskDescription".`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            reasoning: { type: Type.STRING },
+                            plan: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        personName: { type: Type.STRING },
+                                        requestId: { type: Type.STRING },
+                                        taskDescription: { type: Type.STRING }
+                                    },
+                                    required: ["personName", "requestId", "taskDescription"]
+                                }
+                            }
+                        },
+                        required: ["reasoning", "plan"]
+                    }
+                }
+            });
+
+            if (response.text) {
+                const data = JSON.parse(response.text);
+                setAIRecommendation(data);
+            }
+        } catch (error) {
+            console.error("AI Error:", error);
+            setNotification({ message: "AI Assistant failed to generate a plan.", isError: true });
+        } finally {
+            setIsAIGenerating(false);
+        }
+    };
+
+    const applyAIPlan = () => {
+        if (!aiRecommendation) return;
+        
+        const nextSelected: Record<string, Set<number>> = {};
+        
+        aiRecommendation.plan.forEach(item => {
+            const group = categorizedTasks.find(g => g.id === item.requestId);
+            if (group) {
+                const docId = group.docId!;
+                if (!nextSelected[docId]) nextSelected[docId] = new Set();
+                
+                // Try to find the specific task index
+                const idx = group.tasks.findIndex(t => getTaskValue(t, 'description') === item.taskDescription);
+                if (idx !== -1) {
+                    nextSelected[docId].add(idx);
+                } else if (group.tasks.length > 0) {
+                    // Fallback to first item if description doesn't match perfectly
+                    nextSelected[docId].add(0);
+                }
+            }
+        });
+
+        setSelectedItems(nextSelected);
+        setIsAISidebarOpen(false);
+        setNotification({ message: "AI suggested items selected. Please verify and assign." });
+    };
+
+    // --- ASSIGNMENT LOGIC ---
     const handleConfirmAssignment = async (selectedPerson: Tester) => {
         if (isAssigning) return;
         const assignmentsByDocId: Record<string, number[]> = {};
@@ -537,6 +739,36 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
         } catch (err) { setNotification({ message: "Failed to assign.", isError: true }); } finally { setIsAssigning(false); setIsModalOpen(false); fetchData(); }
     };
 
+    const handleSaveManualTask = async (data: { jobId: string; description: string; quantity: string }) => {
+        setIsSavingManual(true);
+        try {
+            const manualTask: RawTask = {
+                _id: Math.random().toString(36).substring(2) + Date.now().toString(36),
+                'Request ID': data.jobId,
+                'Description': data.description,
+                'Quantity': data.quantity,
+                'Sample Name': data.jobId, 
+                'Priority': 'Normal',
+                'Purpose': 'Manual Work',
+                'ManualEntry': true
+            };
+            
+            await saveCategorizedTask({
+                id: data.jobId,
+                category: TaskCategory.Manual,
+                tasks: [manualTask]
+            });
+
+            setNotification({ message: "Manual task created." });
+            setIsManualModalOpen(false);
+            fetchData();
+        } catch (err) {
+            setNotification({ message: "Failed to create manual task.", isError: true });
+        } finally {
+            setIsSavingManual(false);
+        }
+    };
+
     const handleSelectItem = useCallback((docId: string, taskIndex: number, isChecked: boolean) => {
         setSelectedItems(prev => {
             const newSelection = { ...prev };
@@ -546,6 +778,24 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
             return newSelection;
         });
     }, []);
+
+    const handleDeleteManualTaskGroup = async (docId: string) => {
+        // Trigger custom UI confirmation instead of blocked native confirm()
+        setDeleteConfirmId(docId);
+    };
+
+    const executeDeleteManualTask = async () => {
+        if (!deleteConfirmId) return;
+        try {
+            await deleteCategorizedTask(deleteConfirmId);
+            fetchData();
+            setNotification({ message: "Manual task deleted." });
+        } catch (e) {
+            setNotification({ message: "Failed to delete task.", isError: true });
+        } finally {
+            setDeleteConfirmId(null);
+        }
+    };
 
     const totalSelectedCount = useMemo(() => Object.values(selectedItems).reduce((acc: number, set: Set<number>) => acc + set.size, 0), [selectedItems]);
 
@@ -596,13 +846,107 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 animate-slide-in-up">
+        <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 animate-slide-in-up relative overflow-hidden">
             {notification && <Toast message={notification.message} isError={notification.isError} onDismiss={() => setNotification(null)} />}
+            
             <AssignmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAssign={handleConfirmAssignment} personnel={onShiftPersonnel} isPreparation={isAssigningToPrepare} selectedItemCount={totalSelectedCount} isProcessing={isAssigning}/>
+            <ManualTaskModal isOpen={isManualModalOpen} onClose={() => setIsManualModalOpen(false)} onSave={handleSaveManualTask} isProcessing={isSavingManual} />
+
+            {/* Custom Delete Confirmation Modal */}
+            {deleteConfirmId && (
+                <div className="fixed inset-0 bg-base-900/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-fade-in" onClick={() => setDeleteConfirmId(null)}>
+                    <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-w-sm m-4 space-y-6 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
+                        <div className="text-center space-y-4">
+                            <div className="mx-auto w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                                <TrashIcon className="h-8 w-8 text-red-500" />
+                            </div>
+                            <h3 className="text-xl font-black text-base-900 dark:text-base-100 uppercase tracking-tighter">Delete Task?</h3>
+                            <p className="text-sm font-medium text-base-500 leading-relaxed">This manual job will be permanently removed from the active queue.</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 text-[11px] font-black text-base-400 hover:text-base-800 dark:hover:text-white uppercase tracking-widest transition-colors">Cancel</button>
+                            <button onClick={executeDeleteManualTask} className="flex-1 px-6 py-3 bg-red-600 text-white font-black rounded-2xl shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-[11px] active:scale-95 border-b-4 border-red-800">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI ASSISTANT SIDEBAR */}
+            <div className={`fixed inset-y-0 right-0 w-80 bg-white dark:bg-base-900 shadow-[-20px_0_50px_rgba(0,0,0,0.2)] border-l-2 border-primary-500/20 z-[60] transition-transform duration-500 transform ${isAISidebarOpen ? 'translate-x-0' : 'translate-x-full'} backdrop-blur-xl bg-opacity-95 dark:bg-opacity-95 flex flex-col`}>
+                <div className="p-6 border-b border-base-100 dark:border-base-800 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary-600 rounded-xl text-white">
+                            <SparklesIcon className="h-5 w-5" />
+                        </div>
+                        <h3 className="font-black text-sm uppercase tracking-widest text-base-900 dark:text-white">Smart Planner</h3>
+                    </div>
+                    <button onClick={() => setIsAISidebarOpen(false)} className="text-base-400 hover:text-base-900 dark:hover:text-white transition-colors">
+                        <XCircleIcon className="h-6 w-6" />
+                    </button>
+                </div>
+
+                <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
+                    {isAIGenerating ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+                            <div className="relative">
+                                <RefreshIcon className="h-12 w-12 text-primary-500 animate-spin" />
+                                <SparklesIcon className="h-4 w-4 text-amber-400 absolute top-0 right-0 animate-bounce" />
+                            </div>
+                            <p className="text-xs font-black uppercase tracking-[0.3em] text-base-400 animate-pulse">Analyzing Queue...</p>
+                        </div>
+                    ) : aiRecommendation ? (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-2xl border border-primary-100/50 dark:border-primary-500/20">
+                                <h4 className="text-[10px] font-black uppercase text-primary-600 dark:text-primary-400 mb-2 tracking-widest">Assistant Strategy</h4>
+                                <p className="text-[11px] font-bold text-base-800 dark:text-base-200 leading-relaxed italic">"{aiRecommendation.reasoning}"</p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="text-[10px] font-black uppercase text-base-400 tracking-widest">Recommended Plan</h4>
+                                {aiRecommendation.plan.map((item, idx) => (
+                                    <div key={idx} className="p-3 bg-white dark:bg-base-800 rounded-xl border-2 border-base-100 dark:border-base-700 shadow-sm">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-primary-500"></div>
+                                            <span className="text-[11px] font-black text-base-900 dark:text-white uppercase">{item.personName}</span>
+                                        </div>
+                                        <p className="text-[10px] font-bold text-base-500 dark:text-base-400 uppercase tracking-tight truncate leading-none mb-1">REQ: {item.requestId}</p>
+                                        <p className="text-[11px] font-black text-base-800 dark:text-base-300 truncate">{item.taskDescription}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button onClick={applyAIPlan} className="w-full py-4 bg-primary-600 text-white font-black rounded-2xl shadow-xl hover:bg-primary-700 transition-all uppercase tracking-widest text-[11px] active:scale-95 border-b-4 border-primary-800">Apply AI Selection</button>
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+                            <SparklesIcon className="h-12 w-12 mb-4" />
+                            <p className="text-xs font-black uppercase tracking-widest">No recommendation yet</p>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             <div className="flex-shrink-0 space-y-3 px-4 pt-2">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-3xl font-black text-base-950 dark:text-base-50 tracking-tighter">Queue Deployment</h2>
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-3xl font-black text-base-950 dark:text-base-50 tracking-tighter">Queue Deployment</h2>
+                        <div className="flex gap-2">
+                            {activeCategory === TaskCategory.Manual && (
+                                <button 
+                                    onClick={() => setIsManualModalOpen(true)}
+                                    className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl active:scale-95 border-b-4 border-indigo-800"
+                                >
+                                    <PlusIcon className="h-4 w-4" /> Add Manual Task
+                                </button>
+                            )}
+                            <button 
+                                onClick={generateAIPlan}
+                                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-primary-600 to-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-xl active:scale-95 border-b-4 border-indigo-900 ring-2 ring-primary-500/20"
+                            >
+                                <SparklesIcon className="h-4 w-4" /> AI Optimize Plan
+                            </button>
+                        </div>
+                    </div>
                     <button onClick={handleExport} className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-base-800 border-2 border-base-200 dark:border-base-700 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-base-50 transition-all shadow-md active:scale-95">
                         <DownloadIcon className="h-4 w-4" /> Export To Excel
                     </button>
@@ -612,18 +956,20 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                         <div className="flex flex-wrap gap-2.5">
                             {['all', TaskCategory.Urgent, TaskCategory.Normal, TaskCategory.PoCat, TaskCategory.Manual].map(c => (
                                 <button key={c} onClick={() => setActiveCategory(c)} className={`px-5 py-2 text-xs font-black rounded-xl transition-all border-2 uppercase tracking-[0.1em] shadow-md active:scale-95 ${activeCategory === c ? 'bg-primary-700 text-white border-primary-600 ring-4 ring-primary-500/20' : 'bg-white dark:bg-base-800 text-base-800 dark:text-base-100 border-base-200 dark:border-base-700 hover:border-primary-400'}`}>
-                                    {c === 'all' ? 'Show All' : c} <span className={`ml-2 px-2 py-0.5 rounded-lg text-[10px] ${activeCategory === c ? 'bg-white/20' : 'bg-base-100 dark:bg-base-900 text-primary-600'}`}>{categorizedTasks.filter(t => c === 'all' ? t.category !== TaskCategory.Manual : t.category === c).length}</span>
+                                    {c === 'all' ? 'Show All' : c} <span className={`ml-2 px-2 py-0.5 rounded-lg text-[10px] ${activeCategory === c ? 'bg-white/20' : 'bg-base-100 dark:bg-base-900 text-primary-600'}`}>{filteredTasks.filter(t => c === 'all' ? true : t.category === c).length}</span>
                                 </button>
                             ))}
                         </div>
-                        <label className="flex items-center gap-3 text-[11px] font-black text-base-950 dark:text-base-100 uppercase cursor-pointer bg-white dark:bg-base-700 px-5 py-2.5 rounded-2xl border-2 border-base-100 shadow-sm hover:border-primary-400 transition-all">
-                            <input type="checkbox" checked={hideEmptyColumns} onChange={e => setHideEmptyColumns(e.target.checked)} className="h-5 w-5 rounded text-primary-600 focus:ring-0" /> Hide Empty Columns
-                        </label>
+                        {activeCategory !== TaskCategory.Manual && (
+                            <label className="flex items-center gap-3 text-[11px] font-black text-base-950 dark:text-base-100 uppercase cursor-pointer bg-white dark:bg-base-700 px-5 py-2.5 rounded-2xl border-2 border-base-100 shadow-sm hover:border-primary-400 transition-all">
+                                <input type="checkbox" checked={hideEmptyColumns} onChange={e => setHideEmptyColumns(e.target.checked)} className="h-5 w-5 rounded text-primary-600 focus:ring-0" /> Hide Empty Columns
+                            </label>
+                        )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t-2 border-base-100 dark:border-base-700 pt-5">
                         <input type="text" placeholder="Search by Request ID (2512XXXX)..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 focus:bg-white focus:border-primary-500 transition-all text-[15px] font-black tracking-tight placeholder:text-base-400 outline-none"/>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 focus:bg-white font-black text-[15px] outline-none"/>
-                        <select value={selectedShift} onChange={e => setSelectedShift(e.target.value as any)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 font-black text-[15px] uppercase tracking-widest cursor-pointer outline-none"><option value="day">Day Shift (08:00)</option><option value="night">Night Shift (20:00)</option></select>
+                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all font-black text-[15px] outline-none"/>
+                        <select value={selectedShift} onChange={e => setSelectedShift(e.target.value as any)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl font-black text-[15px] uppercase tracking-widest cursor-pointer outline-none transition-all"><option value="day">Day Shift (08:00)</option><option value="night">Night Shift (20:00)</option></select>
                     </div>
                 </div>
                 <div className="p-4 bg-primary-800 rounded-3xl flex justify-between items-center shadow-2xl sticky top-0 z-30 ring-4 ring-primary-500/20">
@@ -641,18 +987,93 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                         <RefreshIcon className="animate-spin h-14 w-14 text-primary-500"/>
                         Syncing Deployment Grid...
                     </div>
+                 ) : activeCategory === TaskCategory.Manual ? (
+                     /* REDESIGNED MANUAL VIEW: List-based logic */
+                     <div className="overflow-auto flex-grow custom-scrollbar p-6 bg-base-50 dark:bg-base-950">
+                        <div className="max-w-4xl mx-auto space-y-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
+                                    <h3 className="text-sm font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-[0.25em]">Pending Manual Jobs</h3>
+                                </div>
+                                <span className="text-[10px] font-black text-base-400 uppercase">Total Queue: {manualTasks.length} jobs</span>
+                            </div>
+
+                            {manualTasks.length === 0 ? (
+                                <div className="py-20 text-center bg-white dark:bg-base-900 rounded-[2rem] border-2 border-dashed border-base-200 dark:border-base-800">
+                                    <div className="opacity-10 mb-4 flex justify-center"><BeakerIcon className="h-20 w-20" /></div>
+                                    <p className="text-base-400 font-black uppercase tracking-widest text-xs">No manual tasks in queue</p>
+                                    <button onClick={() => setIsManualModalOpen(true)} className="mt-4 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-100 transition-colors">Create First Task</button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {manualTasks.map(group => {
+                                        // Manual task groups only have 1 item in the tasks array usually
+                                        const task = group.tasks[0];
+                                        const isSelected = selectedItems[group.docId!]?.has(0);
+                                        const isPrepAwaiting = task.preparationStatus === 'Awaiting Preparation';
+                                        const isPrepReady = task.preparationStatus === 'Prepared' || task.preparationStatus === 'Ready for Testing';
+
+                                        return (
+                                            <div key={group.docId} className={`group relative bg-white dark:bg-base-900 rounded-[1.8rem] border-2 transition-all duration-300 ${isSelected ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.01] shadow-xl' : 'border-base-200 dark:border-base-800 hover:border-primary-300 shadow-sm'}`}>
+                                                <div className="p-5 flex items-center gap-6">
+                                                    <div className="flex-shrink-0">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isSelected || false}
+                                                            onChange={e => handleSelectItem(group.docId!, 0, e.target.checked)}
+                                                            className="h-7 w-7 rounded-xl text-primary-600 focus:ring-0 cursor-pointer border-2 border-base-200"
+                                                        />
+                                                    </div>
+                                                    
+                                                    <div className="flex-grow min-w-0">
+                                                        <div className="flex items-center gap-3 mb-1.5">
+                                                            <span className="text-[13px] font-black text-base-950 dark:text-base-50 tracking-tighter bg-base-100 dark:bg-base-800 px-3 py-1 rounded-xl border border-base-200 dark:border-base-700">{group.id}</span>
+                                                            {isPrepAwaiting && <span className="px-2 py-0.5 bg-amber-500 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm animate-pulse-subtle">Preparing</span>}
+                                                            {isPrepReady && <span className="px-2 py-0.5 bg-emerald-600 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm">Ready</span>}
+                                                        </div>
+                                                        <h4 className="text-[16px] font-black text-base-800 dark:text-base-200 leading-tight line-clamp-2 uppercase">{task.Description || 'No description'}</h4>
+                                                    </div>
+
+                                                    <div className="flex flex-shrink-0 items-center gap-4">
+                                                        <div className="flex flex-col items-center px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
+                                                            <span className="text-[10px] font-black text-indigo-400 uppercase leading-none mb-1">Qty</span>
+                                                            <span className="text-[18px] font-black text-indigo-700 dark:text-indigo-300 leading-none">{task.Quantity || 1}</span>
+                                                        </div>
+                                                        
+                                                        <button 
+                                                            onClick={(e) => { 
+                                                                e.preventDefault(); 
+                                                                e.stopPropagation(); 
+                                                                handleDeleteManualTaskGroup(group.docId!); 
+                                                            }}
+                                                            className="p-3 text-base-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all active:scale-90 relative z-20 pointer-events-auto shadow-sm border border-transparent hover:border-red-100"
+                                                            title="Delete Manual Task"
+                                                        >
+                                                            <TrashIcon className="h-6 w-6" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                     </div>
                  ) : (
+                    /* STANDARD GRID VIEW */
                     <div className="overflow-auto flex-grow custom-scrollbar">
-                        <table className="min-w-full text-xs text-left border-collapse border-spacing-0">
-                            <thead className="bg-base-950 text-white sticky top-0 z-40">
+                        <table className="min-w-full text-xs text-left border-collapse border-spacing-0 table-fixed">
+                            <thead className="bg-slate-900 text-white sticky top-0 z-40">
                                 <tr>
-                                    <th rowSpan={2} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 w-24 bg-base-950 sticky left-0 z-50 text-center">Due</th>
-                                    <th rowSpan={2} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 w-44 bg-base-950 sticky left-24 z-50 text-center">Request ID</th>
+                                    <th rowSpan={2} style={{ width: `${COL_DUE_WIDTH}px`, minWidth: `${COL_DUE_WIDTH}px` }} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 bg-slate-900 sticky left-0 z-[60] text-center text-slate-300">Due</th>
+                                    <th rowSpan={2} style={{ width: `${COL_RID_WIDTH}px`, minWidth: `${COL_RID_WIDTH}px` }} className="px-5 py-4 font-black text-[11px] uppercase tracking-widest border-r border-white/10 bg-slate-900 sticky left-[80px] z-[60] text-center text-slate-300">Request ID & Special Status</th>
                                     {activeGridHeaders.map(([group, subKeys], i) => {
                                         const theme = HEADER_THEMES[i % HEADER_THEMES.length];
                                         return <th key={group} colSpan={subKeys.length} className={`px-4 py-3.5 font-black text-[13px] text-center border-b border-r border-white/10 uppercase tracking-[0.25em] ${theme.headerBg} ${theme.headerText} shadow-inner`}>{group}</th>;
                                     })}
-                                    <th rowSpan={2} className="px-6 py-4 font-black text-[13px] uppercase tracking-[0.2em] bg-base-800 dark:bg-base-950 w-48 text-center border-l border-white/10">Unmapped</th>
+                                    <th rowSpan={2} className="px-6 py-4 font-black text-[13px] uppercase tracking-[0.2em] bg-slate-800 dark:bg-base-950 w-48 text-center border-l border-white/10 text-slate-300">Unmapped</th>
                                 </tr>
                                 <tr>
                                     {activeGridHeaders.flatMap(([group, subKeys], i) => {
@@ -664,15 +1085,15 @@ const TasksTab: React.FC<{ testers: Tester[]; refreshKey: number; }> = ({ tester
                             <tbody className="divide-y-2 divide-base-100 dark:divide-base-800 bg-white dark:bg-base-900">
                                 {gridData.map(row => (
                                     <tr key={row.requestId} className="hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors group">
-                                        <td className="p-1 border-r border-base-200 dark:border-base-800 bg-base-50/50 dark:bg-base-950/80 sticky left-0 z-30 shadow-sm">{renderDueDateCell(row.minDueDate)}</td>
-                                        <td className="px-4 py-3 font-black text-[15px] text-base-950 dark:text-base-50 border-r border-base-200 dark:border-base-800 bg-base-50/80 dark:bg-base-950/90 sticky left-24 z-30 shadow-sm">
-                                            <div className="flex flex-col gap-2 whitespace-nowrap overflow-hidden">
-                                                <span className="tracking-tight">{row.requestId.replace(/^RS1-/, '')}</span>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {row.isSprint && <span className="px-1.5 py-0.5 bg-rose-600 text-white text-[8px] rounded uppercase font-black tracking-widest shadow-sm">SPRINT</span>}
-                                                    {row.isUrgent && <span className="px-1.5 py-0.5 bg-orange-600 text-white text-[8px] rounded uppercase font-black tracking-widest shadow-sm">URGENT</span>}
-                                                    {row.isLSP && <span className="px-1.5 py-0.5 bg-cyan-600 text-white text-[8px] rounded uppercase font-black tracking-widest shadow-sm">LSP</span>}
-                                                    {row.isPoCat && <span className="px-1.5 py-0.5 bg-indigo-600 text-white text-[8px] rounded uppercase font-black tracking-widest shadow-sm">POCAT</span>}
+                                        <td style={{ width: `${COL_DUE_WIDTH}px`, minWidth: `${COL_DUE_WIDTH}px` }} className="p-1 border-r border-base-200 dark:border-base-800 bg-base-50/95 dark:bg-base-900 sticky left-0 z-30 shadow-sm">{renderDueDateCell(row.minDueDate)}</td>
+                                        <td style={{ width: `${COL_RID_WIDTH}px`, minWidth: `${COL_RID_WIDTH}px` }} className="px-4 py-3 font-black text-[15px] text-base-950 dark:text-base-50 border-r border-base-200 dark:border-base-800 bg-base-50/95 dark:bg-base-900 sticky left-[80px] z-30 shadow-sm">
+                                            <div className="flex items-center justify-between gap-4 w-full">
+                                                <span className="tracking-tight shrink-0 font-black text-[16px] text-slate-900 dark:text-slate-100">{row.requestId.replace(/^RS1-/, '')}</span>
+                                                <div className="flex flex-col gap-1 items-end min-w-[70px]">
+                                                    {row.isSprint && <span className="px-2 py-0.5 bg-rose-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-rose-400 w-full text-center">Sprint</span>}
+                                                    {row.isUrgent && <span className="px-2 py-0.5 bg-orange-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-orange-400 w-full text-center">Urgent</span>}
+                                                    {row.isLSP && <span className="px-2 py-0.5 bg-cyan-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-cyan-400 w-full text-center">LSP</span>}
+                                                    {row.isPoCat && <span className="px-2 py-0.5 bg-violet-600 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-violet-500 w-full text-center">PoCat</span>}
                                                 </div>
                                             </div>
                                         </td>
