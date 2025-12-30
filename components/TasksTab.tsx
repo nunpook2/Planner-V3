@@ -20,11 +20,11 @@ declare const XLSX: any;
 // --- HEADER THEMES ---
 const HEADER_THEMES = [
     { name: 'Indigo', headerBg: 'bg-indigo-700', headerText: 'text-white', borderColor: 'border-indigo-500', subHeaderBg: 'bg-indigo-100 dark:bg-indigo-900', subHeaderText: 'text-indigo-950 dark:text-indigo-50' },
-    { name: 'Emerald', headerBg: 'bg-emerald-700', headerText: 'text-white', borderColor: 'border-emerald-500', subHeaderBg: 'bg-emerald-100 dark:bg-emerald-900', subHeaderText: 'text-emerald-950 dark:text-emerald-50' },
-    { name: 'Amber', headerBg: 'bg-amber-600', headerText: 'text-white', borderColor: 'border-amber-400', subHeaderBg: 'bg-amber-100 dark:bg-amber-900', subHeaderText: 'text-amber-950 dark:text-amber-50' },
-    { name: 'Rose', headerBg: 'bg-rose-700', headerText: 'text-white', borderColor: 'border-rose-500', subHeaderBg: 'bg-rose-100 dark:bg-rose-900', subHeaderText: 'text-rose-950 dark:text-rose-50' },
-    { name: 'Cyan', headerBg: 'bg-cyan-700', headerText: 'text-white', borderColor: 'border-cyan-500', subHeaderBg: 'bg-cyan-100 dark:bg-cyan-900', subHeaderText: 'text-cyan-950 dark:text-cyan-50' },
-    { name: 'Violet', headerBg: 'bg-violet-700', headerText: 'text-white', borderColor: 'border-violet-500', subHeaderBg: 'bg-violet-100 dark:bg-violet-900', subHeaderText: 'text-violet-950 dark:text-violet-50' },
+    { name: 'Emerald', headerBg: 'bg-emerald-700', headerText: 'text-white', borderColor: 'border-emerald-500', subHeaderBg: 'bg-emerald-100 dark:bg-emerald-900', subHeaderText: 'text-emerald-950 dark:text-indigo-50' },
+    { name: 'Amber', headerBg: 'bg-amber-600', headerText: 'text-white', borderColor: 'border-amber-400', subHeaderBg: 'bg-amber-100 dark:bg-amber-900', subHeaderText: 'text-amber-950 dark:text-indigo-50' },
+    { name: 'Rose', headerBg: 'bg-rose-700', headerText: 'text-white', borderColor: 'border-rose-500', subHeaderBg: 'bg-rose-100 dark:bg-rose-900', subHeaderText: 'text-rose-950 dark:text-indigo-50' },
+    { name: 'Cyan', headerBg: 'bg-cyan-700', headerText: 'text-white', borderColor: 'border-cyan-500', subHeaderBg: 'bg-cyan-100 dark:bg-cyan-900', subHeaderText: 'text-cyan-950 dark:text-indigo-50' },
+    { name: 'Violet', headerBg: 'bg-violet-700', headerText: 'text-white', borderColor: 'border-violet-500', subHeaderBg: 'bg-violet-100 dark:bg-violet-900', subHeaderText: 'text-violet-950 dark:text-indigo-50' },
 ];
 
 // --- CONSTANTS FOR LAYOUT ---
@@ -110,16 +110,14 @@ const getDueDateTimestamp = (tasks: RawTask[]): number => {
 };
 
 const getSpecialStatus = (task: RawTask, category: TaskCategory) => {
-    const checkFields = ['Purpose', 'Priority', 'Remark (Requester)', 'Note to planer', 'Additional Information', 'Description'];
-    const allText = checkFields.map(f => String(getTaskValue(task, f)).toLowerCase()).join(' ');
-    const normalized = allText.replace(/\s/g, '');
-    const purpose = String(getTaskValue(task, 'Purpose')).toLowerCase();
-    const priority = String(getTaskValue(task, 'Priority')).toLowerCase();
+    const allContent = Object.values(task).map(v => String(v).toLowerCase()).join(' ');
+    
     return {
-        isSprint: normalized.includes('sprint') || purpose.includes('sprint'),
-        isUrgent: category === TaskCategory.Urgent || normalized.includes('urgent') || priority.includes('urgent'),
-        isLSP: normalized.includes('lsp') || purpose.includes('lsp'),
-        isPoCat: category === TaskCategory.PoCat || normalized.includes('pocat') || purpose.includes('pocat')
+        isSprint: allContent.includes('sprint'),
+        isUrgent: category === TaskCategory.Urgent || allContent.includes('urgent'),
+        isLSP: allContent.includes('lsp'),
+        isPoCat: category === TaskCategory.PoCat || allContent.includes('pocat') || allContent.includes('po cat'),
+        isReturned: task.isReturned === true
     };
 };
 
@@ -152,7 +150,7 @@ const ManualTaskModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: 
 
     return (
         <div className="fixed inset-0 bg-base-900/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={!isProcessing ? onClose : undefined}>
-            <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-w-md m-4 space-y-5 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-md m-4 space-y-5 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-4 mb-2">
                     <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600">
                         <PlusIcon className="h-6 w-6" />
@@ -241,8 +239,6 @@ const AssignmentModal: React.FC<{ isOpen: boolean; onClose: () => void; onAssign
     );
 };
 
-// --- MAIN GRID CELL COMPONENT ---
-
 const ExpandableCell: React.FC<{ 
     headerKey: string; 
     items: { task: RawTask; originalIndex: number; sourceDocId: string }[]; 
@@ -299,7 +295,7 @@ const ExpandableCell: React.FC<{
     };
 
     let cellTextColor = 'text-primary-700 dark:text-primary-400';
-    if (hasReturned) cellTextColor = 'text-red-600 dark:text-red-500';
+    if (hasReturned) cellTextColor = 'text-red-600 dark:text-red-500 font-black';
     else if (hasAwaitingPrep) cellTextColor = 'text-amber-600 dark:text-amber-500';
     else if (hasPrepared) cellTextColor = 'text-emerald-600 dark:text-emerald-500';
 
@@ -311,7 +307,7 @@ const ExpandableCell: React.FC<{
                 </span>
                 
                 <div className="flex justify-center gap-1 mt-1">
-                    {hasReturned && <div className="w-1.5 h-1.5 rounded-full bg-red-600 shadow-sm animate-pulse" title="Returned Task"></div>}
+                    {hasReturned && <div className="w-1.5 h-1.5 rounded-full bg-red-600 shadow-sm animate-pulse" title="คืนงานเตรียม - รอจัดสรรใหม่"></div>}
                     {hasPlannerNote && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-sm" title="Has Planner Note"></div>}
                     {hasAwaitingPrep && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-sm" title="Awaiting Preparation"></div>}
                     {hasPrepared && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" title="Ready for Testing"></div>}
@@ -344,7 +340,7 @@ const ExpandableCell: React.FC<{
                                     let rowBg = 'bg-white dark:bg-base-900';
                                     if (isPrepAwaiting) rowBg = 'bg-amber-50/20 dark:bg-amber-900/5';
                                     else if (isPrepReady) rowBg = 'bg-emerald-50/20 dark:bg-emerald-900/5';
-                                    else if (isReturned) rowBg = 'bg-red-50/20 dark:bg-red-900/5';
+                                    else if (isReturned) rowBg = 'bg-red-50/40 dark:bg-red-900/10';
 
                                     return (
                                         <tr key={`${sourceDocId}-${originalIndex}`} className={`${rowBg} transition-colors group`}>
@@ -360,19 +356,24 @@ const ExpandableCell: React.FC<{
                                             <td className="p-4">
                                                 <div className="flex flex-wrap items-baseline justify-between mb-2">
                                                     <div className="flex items-center gap-2.5">
-                                                        <span className="font-black text-[14px] text-base-950 dark:text-base-50 uppercase tracking-tight leading-none truncate max-w-[200px]">{sampleName}</span>
+                                                        <span className={`font-black text-[14px] uppercase tracking-tight leading-none truncate max-w-[200px] ${isReturned ? 'text-red-700 dark:text-red-300' : 'text-base-950 dark:text-base-50'}`}>{sampleName}</span>
                                                         <span className="px-2 py-0.5 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg text-[10px] font-black border border-primary-100/50">x{qty}</span>
                                                     </div>
                                                     <div className="flex gap-1.5">
                                                         {isPrepAwaiting && <span className="px-2 py-0.5 bg-amber-500 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm">In Prep</span>}
                                                         {isPrepReady && <span className="px-2 py-0.5 bg-emerald-600 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm">Ready</span>}
-                                                        {isReturned && <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm">Returned</span>}
+                                                        {isReturned && (
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="px-2.5 py-1 bg-red-600 text-white text-[9px] rounded-lg uppercase font-black tracking-widest shadow-lg animate-pulse border border-red-400">คืนงานเตรียม</span>
+                                                                <span className="text-[7px] font-black text-red-500 uppercase mt-0.5 tracking-[0.1em]">รอส่งไปเตรียมใหม่</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col gap-2">
                                                     <div className="flex items-center justify-between gap-4">
                                                         <div className="flex flex-wrap items-center gap-3 min-w-0">
-                                                            {variant && <span className="text-[11px] font-black text-indigo-500 dark:text-indigo-400 uppercase italic truncate leading-none">{variant}</span>}
+                                                            {variant && <span className={`text-[11px] font-black uppercase italic truncate leading-none ${isReturned ? 'text-red-500' : 'text-indigo-500 dark:text-indigo-400'}`}>{variant}</span>}
                                                             <span className="text-[9px] text-base-400 uppercase font-black tracking-widest flex-shrink-0">Due: {formatDate(getTaskValue(task, 'due date')) || 'ASAP'}</span>
                                                         </div>
                                                         <button 
@@ -418,10 +419,16 @@ const ExpandableCell: React.FC<{
                                                             <p className="text-[11px] font-bold text-base-800 dark:text-indigo-100 italic leading-relaxed">{task.plannerNote}</p>
                                                         </div>
                                                     )}
+
                                                     {isReturned && task.returnReason && (
-                                                        <div className="mt-1 flex items-start gap-2 text-[10px] text-red-700 dark:text-red-400 font-bold bg-red-50/50 dark:bg-red-950/20 p-2.5 rounded-xl border border-red-100/50 shadow-sm">
-                                                            <ArrowUturnLeftIcon className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                                                            <span className="italic leading-snug">Returned by {task.returnedBy}: "{task.returnReason}"</span>
+                                                        <div className="mt-1 flex items-start gap-3 text-[11px] text-red-700 dark:text-red-400 font-bold bg-red-100/50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-200 shadow-md">
+                                                            <div className="p-1.5 bg-red-600 text-white rounded-lg flex-shrink-0 shadow-sm">
+                                                                <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[9px] uppercase tracking-wider text-red-500 font-black mb-0.5">Return Remark (From {task.returnedBy || 'Analyst'})</span>
+                                                                <p className="italic leading-relaxed">"{task.returnReason}"</p>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -437,8 +444,6 @@ const ExpandableCell: React.FC<{
         </td>
     );
 };
-
-// --- MAIN COMPONENT ---
 
 const TasksTab: React.FC<{ 
     testers: Tester[]; 
@@ -465,10 +470,7 @@ const TasksTab: React.FC<{
     const [isSavingManual, setIsSavingManual] = useState(false);
     const [noteEditor, setNoteEditor] = useState<{ docId: string, index: number, text: string } | null>(null);
     
-    // Custom Confirmation State
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
-    // AI States
     const [isAIGenerating, setIsAIGenerating] = useState(false);
     const [aiRecommendation, setAIRecommendation] = useState<{
         reasoning: string;
@@ -522,13 +524,6 @@ const TasksTab: React.FC<{
 
     const filteredTasks = useMemo(() => {
         return categorizedTasks.filter(task => {
-            // EXCLUSION LOGIC: Exclude ANY task group that has been returned from Shift Tracking
-            if (task.isReturnedPool === true) return false;
-            // Additional safety for cleaned/unassigned tasks from Planner
-            if (task.returnedBy || task.returnReason) return false;
-            // Also check individual tasks within the group for returned flags
-            if (task.tasks.some(t => t.isReturned === true)) return false;
-
             if (task.category === TaskCategory.Manual) return activeCategory === 'all' || activeCategory === TaskCategory.Manual;
             const categoryMatch = activeCategory === 'all' || task.category === activeCategory;
             const idMatch = filterRequestId === '' || task.id.toLowerCase().includes(filterRequestId.toLowerCase());
@@ -542,7 +537,7 @@ const TasksTab: React.FC<{
             cells: Record<string, { task: RawTask; originalIndex: number; sourceDocId: string }[]>;
             unmappedItems: { task: RawTask; originalIndex: number; sourceDocId: string }[]; 
             minDueDate: number;
-            isSprint: boolean; isUrgent: boolean; isLSP: boolean; isPoCat: boolean;
+            isSprint: boolean; isUrgent: boolean; isLSP: boolean; isPoCat: boolean; isReturned: boolean;
             seenIds: Set<string>;
         }> = {};
         
@@ -553,7 +548,7 @@ const TasksTab: React.FC<{
             if (!mergedRows[rid]) {
                 mergedRows[rid] = { 
                     requestId: rid, cells: {}, unmappedItems: [], minDueDate: Infinity,
-                    isSprint: false, isUrgent: false, isLSP: false, isPoCat: false,
+                    isSprint: false, isUrgent: false, isLSP: false, isPoCat: false, isReturned: false,
                     seenIds: new Set<string>()
                 };
             }
@@ -567,6 +562,7 @@ const TasksTab: React.FC<{
                 if (spec.isUrgent) row.isUrgent = true;
                 if (spec.isLSP) row.isLSP = true;
                 if (spec.isPoCat) row.isPoCat = true;
+                if (spec.isReturned) row.isReturned = true;
 
                 const taskId = task._id || `${task['Sample Name']}-${task['Description']}-${task['Variant']}`;
                 if (row.seenIds.has(taskId)) return;
@@ -585,7 +581,6 @@ const TasksTab: React.FC<{
         return Object.values(mergedRows).sort((a, b) => a.minDueDate - b.minDueDate);
     }, [filteredTasks, testMappings]);
 
-    // Manual Tasks specific data processing
     const manualTasks = useMemo(() => {
         return filteredTasks.filter(t => t.category === TaskCategory.Manual);
     }, [filteredTasks]);
@@ -624,7 +619,6 @@ const TasksTab: React.FC<{
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
             const taskSummary = categorizedTasks.map(group => ({
                 id: group.id,
                 category: group.category,
@@ -635,22 +629,10 @@ const TasksTab: React.FC<{
                     sprint: getSpecialStatus(t, group.category).isSprint
                 }))
             }));
-
             const staffList = onShiftPersonnel.testers.map(p => p.name);
-
-            const prompt = `You are an expert Laboratory Operations Manager. 
-Analyze the following queue of laboratory tasks and available personnel for the current shift. 
-Create an optimal assignment plan that prioritizes urgent/sprint tasks while balancing the workload across staff members.
-
-Current Tasks in Queue:
-${JSON.stringify(taskSummary, null, 2)}
-
-Available Analysts:
-${staffList.join(', ')}
-
-Provide a clear plan in JSON format with two fields: 
-1. "reasoning": a string explaining your strategy.
-2. "plan": an array of objects with "personName", "requestId", and "taskDescription".`;
+            const prompt = `Lab Operations Manager AI... Create optimal assignment... 
+Tasks: ${JSON.stringify(taskSummary)} 
+Staff: ${staffList.join(', ')}`;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
@@ -678,47 +660,27 @@ Provide a clear plan in JSON format with two fields:
                     }
                 }
             });
-
-            if (response.text) {
-                const data = JSON.parse(response.text);
-                setAIRecommendation(data);
-            }
-        } catch (error) {
-            console.error("AI Error:", error);
-            setNotification({ message: "AI Assistant failed to generate a plan.", isError: true });
-        } finally {
-            setIsAIGenerating(false);
-        }
+            if (response.text) setAIRecommendation(JSON.parse(response.text));
+        } catch (error) { setNotification({ message: "AI Assistant failed.", isError: true }); } finally { setIsAIGenerating(false); }
     };
 
     const applyAIPlan = () => {
         if (!aiRecommendation) return;
-        
         const nextSelected: Record<string, Set<number>> = {};
-        
         aiRecommendation.plan.forEach(item => {
             const group = categorizedTasks.find(g => g.id === item.requestId);
             if (group) {
                 const docId = group.docId!;
                 if (!nextSelected[docId]) nextSelected[docId] = new Set();
-                
-                // Try to find the specific task index
                 const idx = group.tasks.findIndex(t => getTaskValue(t, 'description') === item.taskDescription);
-                if (idx !== -1) {
-                    nextSelected[docId].add(idx);
-                } else if (group.tasks.length > 0) {
-                    // Fallback to first item if description doesn't match perfectly
-                    nextSelected[docId].add(0);
-                }
+                if (idx !== -1) nextSelected[docId].add(idx);
+                else if (group.tasks.length > 0) nextSelected[docId].add(0);
             }
         });
-
         setSelectedItems(nextSelected);
         setIsAISidebarOpen(false);
-        setNotification({ message: "AI suggested items selected. Please verify and assign." });
     };
 
-    // --- ASSIGNMENT LOGIC ---
     const handleConfirmAssignment = async (selectedPerson: Tester) => {
         if (isAssigning) return;
         const assignmentsByDocId: Record<string, number[]> = {};
@@ -732,12 +694,14 @@ Provide a clear plan in JSON format with two fields:
                 if (!originalTask) continue;
                 if (isAssigningToPrepare) await assignItemsToPrepare(originalTask, selectedIndices, selectedPerson, selectedDate, selectedShift);
                 else {
-                    const itemsToAssign = selectedIndices.map(index => originalTask.tasks[index]);
+                    const itemsToAssign = selectedIndices.map(index => {
+                        const t = { ...originalTask.tasks[index] };
+                        delete t.isReturned;
+                        return t;
+                    });
                     await addAssignedTask({ requestId: originalTask.id, tasks: itemsToAssign, category: originalTask.category, testerId: selectedPerson.id, testerName: selectedPerson.name, assignedDate: selectedDate, shift: selectedShift, status: TaskStatus.Pending });
-                    if (originalTask.category !== TaskCategory.Manual) {
-                        const remainingItems = originalTask.tasks.filter((_, index) => !selectedIndices.includes(index));
-                        if (remainingItems.length > 0) await updateCategorizedTask(docId, { tasks: remainingItems }); else await deleteCategorizedTask(docId);
-                    }
+                    const remainingItems = originalTask.tasks.filter((_, index) => !selectedIndices.includes(index));
+                    if (remainingItems.length > 0) await updateCategorizedTask(docId, { tasks: remainingItems }); else await deleteCategorizedTask(docId);
                 }
             }
             setNotification({ message: "Task Assigned." });
@@ -758,21 +722,11 @@ Provide a clear plan in JSON format with two fields:
                 'Purpose': 'Manual Work',
                 'ManualEntry': true
             };
-            
-            await saveCategorizedTask({
-                id: data.jobId,
-                category: TaskCategory.Manual,
-                tasks: [manualTask]
-            });
-
+            await saveCategorizedTask({ id: data.jobId, category: TaskCategory.Manual, tasks: [manualTask] });
             setNotification({ message: "Manual task created." });
             setIsManualModalOpen(false);
             fetchData();
-        } catch (err) {
-            setNotification({ message: "Failed to create manual task.", isError: true });
-        } finally {
-            setIsSavingManual(false);
-        }
+        } catch (err) { setNotification({ message: "Failed.", isError: true }); } finally { setIsSavingManual(false); }
     };
 
     const handleSelectItem = useCallback((docId: string, taskIndex: number, isChecked: boolean) => {
@@ -785,101 +739,7 @@ Provide a clear plan in JSON format with two fields:
         });
     }, []);
 
-    const handleDeleteManualTaskGroup = async (docId: string) => {
-        setDeleteConfirmId(docId);
-    };
-
-    const executeDeleteManualTask = async () => {
-        if (!deleteConfirmId) return;
-        try {
-            await deleteCategorizedTask(deleteConfirmId);
-            fetchData();
-            setNotification({ message: "Manual task deleted." });
-        } catch (e) {
-            setNotification({ message: "Failed to delete task.", isError: true });
-        } finally {
-            setDeleteConfirmId(null);
-        }
-    };
-
     const totalSelectedCount = useMemo(() => Object.values(selectedItems).reduce((acc: number, set: Set<number>) => acc + set.size, 0), [selectedItems]);
-
-    const handleExport = () => {
-        if (gridData.length === 0) return;
-
-        // Matrix Header Rows
-        const headerRow1 = ["Due Date", "Request ID", "Special Status"];
-        const headerRow2 = ["", "", ""];
-
-        activeGridHeaders.forEach(([group, subKeys]) => {
-            headerRow1.push(group);
-            for (let i = 1; i < subKeys.length; i++) headerRow1.push(""); // Merge placeholders
-            subKeys.forEach(key => headerRow2.push(key.split('|')[1]));
-        });
-        headerRow1.push("Unmapped");
-        headerRow2.push("");
-
-        // Build Data Rows
-        const rows = gridData.map(row => {
-            const dueDateStr = row.minDueDate === Infinity ? "N/A" : formatDate(row.minDueDate);
-            const specialStatus = [
-                row.isSprint ? "SPRINT" : "",
-                row.isUrgent ? "URGENT" : "",
-                row.isLSP ? "LSP" : "",
-                row.isPoCat ? "POCAT" : ""
-            ].filter(Boolean).join(", ");
-
-            const matrixRow = [dueDateStr, row.requestId, specialStatus];
-
-            activeColumnKeys.forEach(headerKey => {
-                const items = row.cells[headerKey] || [];
-                matrixRow.push(items.length > 0 ? items.length : "");
-            });
-
-            matrixRow.push(row.unmappedItems.length > 0 ? row.unmappedItems.length : "");
-            return matrixRow;
-        });
-
-        // Combine into Matrix AOA
-        const aoa = [headerRow1, headerRow2, ...rows];
-
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-        // Simple Styling/Layout through worksheet properties
-        const colWidths = [
-            { wch: 12 }, // Due Date
-            { wch: 18 }, // Request ID
-            { wch: 20 }, // Status
-            ...activeColumnKeys.map(() => ({ wch: 8 })),
-            { wch: 12 }  // Unmapped
-        ];
-        ws['!cols'] = colWidths;
-
-        // Auto-merges for Group Headers
-        const merges: any[] = [];
-        let currentColIndex = 3; // Starting after Due, ID, Status
-        activeGridHeaders.forEach(([group, subKeys]) => {
-            if (subKeys.length > 1) {
-                merges.push({
-                    s: { r: 0, c: currentColIndex },
-                    e: { r: 0, c: currentColIndex + subKeys.length - 1 }
-                });
-            }
-            currentColIndex += subKeys.length;
-        });
-
-        // Vertical Merges for Static Columns
-        merges.push({ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }); // Due Date
-        merges.push({ s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }); // ID
-        merges.push({ s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }); // Status
-        merges.push({ s: { r: 0, c: aoa[0].length - 1 }, e: { r: 1, c: aoa[0].length - 1 } }); // Unmapped
-
-        ws['!merges'] = merges;
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Task Assignment Grid");
-        XLSX.writeFile(wb, `TaskGrid_${selectedDate}.xlsx`);
-    };
 
     const handleUpdatePlannerNote = async (docId: string, itemIndex: number, note: string) => {
         const group = categorizedTasks.find(t => t.docId === docId);
@@ -915,77 +775,18 @@ Provide a clear plan in JSON format with two fields:
             <AssignmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAssign={handleConfirmAssignment} personnel={onShiftPersonnel} isPreparation={isAssigningToPrepare} selectedItemCount={totalSelectedCount} isProcessing={isAssigning}/>
             <ManualTaskModal isOpen={isManualModalOpen} onClose={() => setIsManualModalOpen(false)} onSave={handleSaveManualTask} isProcessing={isSavingManual} />
 
-            {/* Custom Delete Confirmation Modal */}
-            {deleteConfirmId && (
-                <div className="fixed inset-0 bg-base-900/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-fade-in" onClick={() => setDeleteConfirmId(null)}>
-                    <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-sm m-4 space-y-6 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
-                        <div className="text-center space-y-4">
-                            <div className="mx-auto w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center">
-                                <TrashIcon className="h-8 w-8 text-red-500" />
-                            </div>
-                            <h3 className="text-xl font-black text-base-900 dark:text-base-100 uppercase tracking-tighter">Delete Task?</h3>
-                            <p className="text-sm font-medium text-base-500 leading-relaxed">This manual job will be permanently removed from the active queue.</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setDeleteConfirmId(null)} className="flex-1 px-6 py-3 text-[11px] font-black text-base-400 hover:text-base-800 dark:hover:text-white uppercase tracking-widest transition-colors">Cancel</button>
-                            <button onClick={executeDeleteManualTask} className="flex-1 px-6 py-3 bg-red-600 text-white font-black rounded-2xl shadow-xl hover:bg-red-700 transition-all uppercase tracking-widest text-[11px] active:scale-95 border-b-4 border-red-800">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* AI ASSISTANT SIDEBAR */}
             <div className={`fixed inset-y-0 right-0 w-80 bg-white dark:bg-base-900 shadow-[-20px_0_50px_rgba(0,0,0,0.2)] border-l-2 border-primary-500/20 z-[60] transition-transform duration-500 transform ${isAISidebarOpen ? 'translate-x-0' : 'translate-x-full'} backdrop-blur-xl bg-opacity-95 dark:bg-opacity-95 flex flex-col`}>
                 <div className="p-6 border-b border-base-100 dark:border-base-800 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary-600 rounded-xl text-white">
-                            <SparklesIcon className="h-5 w-5" />
-                        </div>
+                        <div className="p-2 bg-primary-600 rounded-xl text-white"><SparklesIcon className="h-5 w-5" /></div>
                         <h3 className="font-black text-sm uppercase tracking-widest text-base-900 dark:text-white">Smart Planner</h3>
                     </div>
-                    <button onClick={() => setIsAISidebarOpen(false)} className="text-base-400 hover:text-base-900 dark:hover:text-white transition-colors">
-                        <XCircleIcon className="h-6 w-6" />
-                    </button>
+                    <button onClick={() => setIsAISidebarOpen(false)} className="text-base-400 hover:text-base-900 dark:hover:text-white transition-colors"><XCircleIcon className="h-6 w-6" /></button>
                 </div>
-
                 <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
-                    {isAIGenerating ? (
-                        <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-                            <div className="relative">
-                                <RefreshIcon className="h-12 w-12 text-primary-500 animate-spin" />
-                                <SparklesIcon className="h-4 w-4 text-amber-400 absolute top-0 right-0 animate-bounce" />
-                            </div>
-                            <p className="text-xs font-black uppercase tracking-[0.3em] text-base-400 animate-pulse">Analyzing Queue...</p>
-                        </div>
-                    ) : aiRecommendation ? (
-                        <div className="space-y-6 animate-fade-in">
-                            <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-2xl border border-primary-100/50 dark:border-primary-500/20">
-                                <h4 className="text-[10px] font-black uppercase text-primary-600 dark:text-primary-400 mb-2 tracking-widest">Assistant Strategy</h4>
-                                <p className="text-[11px] font-bold text-base-800 dark:text-base-200 leading-relaxed italic">"{aiRecommendation.reasoning}"</p>
-                            </div>
-
-                            <div className="space-y-3">
-                                <h4 className="text-[10px] font-black uppercase text-base-400 tracking-widest">Recommended Plan</h4>
-                                {aiRecommendation.plan.map((item, idx) => (
-                                    <div key={idx} className="p-3 bg-white dark:bg-base-800 rounded-xl border-2 border-base-100 dark:border-base-700 shadow-sm">
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-primary-500"></div>
-                                            <span className="text-[11px] font-black text-base-900 dark:text-white uppercase">{item.personName}</span>
-                                        </div>
-                                        <p className="text-[10px] font-bold text-base-500 dark:text-base-400 uppercase tracking-tight truncate leading-none mb-1">REQ: {item.requestId}</p>
-                                        <p className="text-[11px] font-black text-base-800 dark:text-base-300 truncate">{item.taskDescription}</p>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <button onClick={applyAIPlan} className="w-full py-4 bg-primary-600 text-white font-black rounded-2xl shadow-xl hover:bg-primary-700 transition-all uppercase tracking-widest text-[11px] active:scale-95 border-b-4 border-primary-800">Apply AI Selection</button>
-                        </div>
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
-                            <SparklesIcon className="h-12 w-12 mb-4" />
-                            <p className="text-xs font-black uppercase tracking-widest">No recommendation yet</p>
-                        </div>
-                    )}
+                    {isAIGenerating ? <div className="h-full flex flex-col items-center justify-center text-center space-y-4"><RefreshIcon className="h-12 w-12 animate-spin"/><p className="text-xs font-black uppercase tracking-[0.3em] text-base-400">Analyzing...</p></div> : 
+                    aiRecommendation ? <div className="space-y-6"><button onClick={applyAIPlan} className="w-full py-4 bg-primary-600 text-white font-black rounded-2xl">Apply AI Selection</button></div> : 
+                    <div className="h-full flex flex-col items-center justify-center text-center opacity-30"><SparklesIcon className="h-12 w-12" /></div>}
                 </div>
             </div>
 
@@ -995,44 +796,26 @@ Provide a clear plan in JSON format with two fields:
                         <h2 className="text-3xl font-black text-base-950 dark:text-base-50 tracking-tighter">Queue Deployment</h2>
                         <div className="flex gap-2">
                             {activeCategory === TaskCategory.Manual && (
-                                <button 
-                                    onClick={() => setIsManualModalOpen(true)}
-                                    className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl active:scale-95 border-b-4 border-indigo-800"
-                                >
-                                    <PlusIcon className="h-4 w-4" /> Add Manual Task
-                                </button>
+                                <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl active:scale-95 border-b-4 border-indigo-800"><PlusIcon className="h-4 w-4" /> Add Manual Task</button>
                             )}
-                            <button 
-                                onClick={generateAIPlan}
-                                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-primary-600 to-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-xl active:scale-95 border-b-4 border-indigo-900 ring-2 ring-primary-500/20"
-                            >
-                                <SparklesIcon className="h-4 w-4" /> AI Optimize Plan
-                            </button>
+                            <button onClick={generateAIPlan} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-primary-600 to-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active:scale-95 border-b-4 border-indigo-900"><SparklesIcon className="h-4 w-4" /> AI Optimize Plan</button>
                         </div>
                     </div>
-                    <button onClick={handleExport} className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-base-800 border-2 border-base-200 dark:border-base-700 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-base-50 transition-all shadow-md active:scale-95">
-                        <DownloadIcon className="h-4 w-4" /> Export To Excel
-                    </button>
                 </div>
                 <div className="p-5 bg-white/80 dark:bg-base-800/80 rounded-3xl border-2 border-white dark:border-base-700 shadow-xl space-y-5 backdrop-blur-md">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="flex flex-wrap gap-2.5">
                             {['all', TaskCategory.Urgent, TaskCategory.Normal, TaskCategory.PoCat, TaskCategory.Manual].map(c => (
-                                <button key={c} onClick={() => setActiveCategory(c)} className={`px-5 py-2 text-xs font-black rounded-xl transition-all border-2 uppercase tracking-[0.1em] shadow-md active:scale-95 ${activeCategory === c ? 'bg-primary-700 text-white border-primary-600 ring-4 ring-primary-500/20' : 'bg-white dark:bg-base-800 text-base-800 dark:text-base-100 border-base-200 dark:border-base-700 hover:border-primary-400'}`}>
+                                <button key={c} onClick={() => setActiveCategory(c)} className={`px-5 py-2 text-xs font-black rounded-xl transition-all border-2 uppercase tracking-[0.1em] shadow-md active:scale-95 ${activeCategory === c ? 'bg-primary-700 text-white border-primary-600' : 'bg-white dark:bg-base-800 text-base-800 dark:text-base-100 border-base-200 dark:border-base-700'}`}>
                                     {c === 'all' ? 'Show All' : c} <span className={`ml-2 px-2 py-0.5 rounded-lg text-[10px] ${activeCategory === c ? 'bg-white/20' : 'bg-base-100 dark:bg-base-900 text-primary-600'}`}>{filteredTasks.filter(t => c === 'all' ? true : t.category === c).length}</span>
                                 </button>
                             ))}
                         </div>
-                        {activeCategory !== TaskCategory.Manual && (
-                            <label className="flex items-center gap-3 text-[11px] font-black text-base-950 dark:text-base-100 uppercase cursor-pointer bg-white dark:bg-base-700 px-5 py-2.5 rounded-2xl border-2 border-base-100 shadow-sm hover:border-primary-400 transition-all">
-                                <input type="checkbox" checked={hideEmptyColumns} onChange={e => setHideEmptyColumns(e.target.checked)} className="h-5 w-5 rounded text-primary-600 focus:ring-0" /> Hide Empty Columns
-                            </label>
-                        )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t-2 border-base-100 dark:border-base-700 pt-5">
-                        <input type="text" placeholder="Search by Request ID (2512XXXX)..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 focus:bg-white focus:border-primary-500 transition-all text-[15px] font-black tracking-tight placeholder:text-base-400 outline-none"/>
-                        <input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all font-black text-[15px] outline-none"/>
-                        <select value={selectedShift} onChange={e => onShiftChange(e.target.value as any)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl font-black text-[15px] uppercase tracking-widest cursor-pointer outline-none transition-all"><option value="day">Day Shift (08:00)</option><option value="night">Night Shift (20:00)</option></select>
+                        <input type="text" placeholder="Search by Request ID..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 text-[15px] font-black tracking-tight outline-none"/>
+                        <input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl font-black text-[15px] outline-none"/>
+                        <select value={selectedShift} onChange={e => onShiftChange(e.target.value as any)} className="w-full p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl font-black text-[15px] uppercase tracking-widest outline-none"><option value="day">Day Shift (08:00)</option><option value="night">Night Shift (20:00)</option></select>
                     </div>
                 </div>
                 <div className="p-4 bg-primary-800 rounded-3xl flex justify-between items-center shadow-2xl sticky top-0 z-30 ring-4 ring-primary-500/20">
@@ -1047,81 +830,8 @@ Provide a clear plan in JSON format with two fields:
             <div className="flex-grow min-h-0 overflow-hidden border-2 border-base-200 dark:border-base-700 rounded-3xl bg-white dark:bg-base-900 shadow-2xl relative flex flex-col mx-4 mb-4">
                  {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full text-base-500 font-black gap-4 uppercase tracking-[0.4em] bg-base-50 dark:bg-base-950">
-                        <RefreshIcon className="animate-spin h-14 w-14 text-primary-500"/>
-                        Syncing Deployment Grid...
+                        <RefreshIcon className="animate-spin h-14 w-14 text-primary-500"/>Syncing Deployment Grid...
                     </div>
-                 ) : activeCategory === TaskCategory.Manual ? (
-                     <div className="overflow-auto flex-grow custom-scrollbar p-6 bg-base-50 dark:bg-base-950">
-                        <div className="max-w-4xl mx-auto space-y-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
-                                    <h3 className="text-sm font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-[0.25em]">Pending Manual Jobs</h3>
-                                </div>
-                                <span className="text-[10px] font-black text-base-400 uppercase">Total Queue: {manualTasks.length} jobs</span>
-                            </div>
-
-                            {manualTasks.length === 0 ? (
-                                <div className="py-20 text-center bg-white dark:bg-base-900 rounded-[2rem] border-2 border-dashed border-base-200 dark:border-base-800">
-                                    <div className="opacity-10 mb-4 flex justify-center"><BeakerIcon className="h-20 w-20" /></div>
-                                    <p className="text-base-400 font-black uppercase tracking-widest text-xs">No manual tasks in queue</p>
-                                    <button onClick={() => setIsManualModalOpen(true)} className="mt-4 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-100 transition-colors">Create First Task</button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {manualTasks.map(group => {
-                                        const task = group.tasks[0];
-                                        const isSelected = selectedItems[group.docId!]?.has(0);
-                                        const isPrepAwaiting = task.preparationStatus === 'Awaiting Preparation';
-                                        const isPrepReady = task.preparationStatus === 'Prepared' || task.preparationStatus === 'Ready for Testing';
-
-                                        return (
-                                            <div key={group.docId} className={`group relative bg-white dark:bg-base-900 rounded-[1.8rem] border-2 transition-all duration-300 ${isSelected ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.01] shadow-xl' : 'border-base-200 dark:border-base-800 hover:border-primary-300 shadow-sm'}`}>
-                                                <div className="p-5 flex items-center gap-6">
-                                                    <div className="flex-shrink-0">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={isSelected || false}
-                                                            onChange={e => handleSelectItem(group.docId!, 0, e.target.checked)}
-                                                            className="h-7 w-7 rounded-xl text-primary-600 focus:ring-0 cursor-pointer border-2 border-base-200"
-                                                        />
-                                                    </div>
-                                                    
-                                                    <div className="flex-grow min-w-0">
-                                                        <div className="flex items-center gap-3 mb-1.5">
-                                                            <span className="text-[13px] font-black text-base-950 dark:text-base-50 tracking-tighter bg-base-100 dark:bg-base-800 px-3 py-1 rounded-xl border border-base-200 dark:border-base-700">{group.id}</span>
-                                                            {isPrepAwaiting && <span className="px-2 py-0.5 bg-amber-500 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm animate-pulse-subtle">Preparing</span>}
-                                                            {isPrepReady && <span className="px-2 py-0.5 bg-emerald-600 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm">Ready</span>}
-                                                        </div>
-                                                        <h4 className="text-[16px] font-black text-base-800 dark:text-base-200 leading-tight line-clamp-2 uppercase">{task.Description || 'No description'}</h4>
-                                                    </div>
-
-                                                    <div className="flex flex-shrink-0 items-center gap-4">
-                                                        <div className="flex flex-col items-center px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
-                                                            <span className="text-[10px] font-black text-indigo-400 uppercase leading-none mb-1">Qty</span>
-                                                            <span className="text-[18px] font-black text-indigo-700 dark:text-indigo-300 leading-none">{task.Quantity || 1}</span>
-                                                        </div>
-                                                        
-                                                        <button 
-                                                            onClick={(e) => { 
-                                                                e.preventDefault(); 
-                                                                e.stopPropagation(); 
-                                                                handleDeleteManualTaskGroup(group.docId!); 
-                                                            }}
-                                                            className="p-3 text-base-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all active:scale-90 relative z-20 pointer-events-auto shadow-sm border border-transparent hover:border-red-100"
-                                                            title="Delete Manual Task"
-                                                        >
-                                                            <TrashIcon className="h-6 w-6" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                     </div>
                  ) : (
                     <div className="overflow-auto flex-grow custom-scrollbar">
                         <table className="min-w-full text-xs text-left border-collapse border-spacing-0 table-fixed">
@@ -1150,6 +860,7 @@ Provide a clear plan in JSON format with two fields:
                                             <div className="flex items-center justify-between gap-4 w-full">
                                                 <span className="tracking-tight shrink-0 font-black text-[16px] text-slate-900 dark:text-slate-100">{row.requestId.replace(/^RS1-/, '')}</span>
                                                 <div className="flex flex-col gap-1 items-end min-w-[70px]">
+                                                    {/* REMOVED: row.isReturned Badge from Request ID column as requested */}
                                                     {row.isSprint && <span className="px-2 py-0.5 bg-rose-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-rose-400 w-full text-center">Sprint</span>}
                                                     {row.isUrgent && <span className="px-2 py-0.5 bg-orange-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-orange-400 w-full text-center">Urgent</span>}
                                                     {row.isLSP && <span className="px-2 py-0.5 bg-cyan-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-cyan-400 w-full text-center">LSP</span>}
@@ -1159,33 +870,19 @@ Provide a clear plan in JSON format with two fields:
                                         </td>
                                         {activeColumnKeys.map(header => (
                                             <ExpandableCell 
-                                                key={header} 
-                                                headerKey={header} 
+                                                key={header} headerKey={header} 
                                                 items={row.cells[header] || []} 
                                                 isGroupEnd={lastKeysOfGroups.has(header)}
-                                                expandedCell={expandedCell}
-                                                setExpandedCell={setExpandedCell}
-                                                selectedItems={selectedItems}
-                                                handleSelectItem={handleSelectItem}
-                                                setSelectedItems={setSelectedItems}
-                                                isAssigningToPrepare={isAssigningToPrepare}
-                                                noteEditor={noteEditor}
-                                                setNoteEditor={setNoteEditor}
-                                                handleUpdatePlannerNote={handleUpdatePlannerNote}
+                                                expandedCell={expandedCell} setExpandedCell={setExpandedCell}
+                                                selectedItems={selectedItems} handleSelectItem={handleSelectItem} setSelectedItems={setSelectedItems}
+                                                isAssigningToPrepare={isAssigningToPrepare} noteEditor={noteEditor} setNoteEditor={setNoteEditor} handleUpdatePlannerNote={handleUpdatePlannerNote}
                                             />
                                         ))}
                                         <ExpandableCell 
-                                            headerKey="unmapped" 
-                                            items={row.unmappedItems}
-                                            expandedCell={expandedCell}
-                                            setExpandedCell={setExpandedCell}
-                                            selectedItems={selectedItems}
-                                            handleSelectItem={handleSelectItem}
-                                            setSelectedItems={setSelectedItems}
-                                            isAssigningToPrepare={isAssigningToPrepare}
-                                            noteEditor={noteEditor}
-                                            setNoteEditor={setNoteEditor}
-                                            handleUpdatePlannerNote={handleUpdatePlannerNote}
+                                            headerKey="unmapped" items={row.unmappedItems}
+                                            expandedCell={expandedCell} setExpandedCell={setExpandedCell}
+                                            selectedItems={selectedItems} handleSelectItem={handleSelectItem} setSelectedItems={setSelectedItems}
+                                            isAssigningToPrepare={isAssigningToPrepare} noteEditor={noteEditor} setNoteEditor={setNoteEditor} handleUpdatePlannerNote={handleUpdatePlannerNote}
                                         />
                                     </tr>
                                 ))}

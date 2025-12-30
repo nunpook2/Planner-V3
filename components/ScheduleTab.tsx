@@ -5,7 +5,9 @@ import { TaskStatus, TaskCategory } from '../types';
 import { 
     getAssignedTasks, updateAssignedTask, deleteAssignedTask, 
     getAssignedPrepareTasks, markItemAsPrepared, 
-    addCategorizedTask, unassignTaskToPool, updateAssignedPrepareTask
+    addCategorizedTask, unassignTaskToPool, updateAssignedPrepareTask,
+    resetItemPreparation,
+    deleteAssignedPrepareTask
 } from '../services/dataService';
 import { 
     CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, 
@@ -37,7 +39,11 @@ const LocalModal: React.FC<{
     confirmText?: string;
     confirmColor?: string;
     icon?: React.ReactNode;
-}> = ({ isOpen, onClose, onConfirm, title, message, showInput, isTextArea, inputPlaceholder, confirmText = "Confirm", confirmColor = "bg-primary-600", icon }) => {
+}> = ({ 
+    isOpen, onClose, onConfirm, title, message, showInput, 
+    isTextArea, inputPlaceholder, confirmText = "Confirm", 
+    confirmColor = "bg-primary-600", icon 
+}) => {
     const [val, setVal] = useState('');
     
     useEffect(() => { 
@@ -52,7 +58,7 @@ const LocalModal: React.FC<{
         <div className="fixed inset-0 bg-base-900/80 backdrop-blur-md flex items-center justify-center z-[100] animate-fade-in" onClick={onClose}>
             <div className="bg-white dark:bg-base-800 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] p-8 w-full max-w-lg m-4 space-y-6 animate-slide-in-up border border-white/20 dark:border-base-700" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-2xl ${confirmColor.includes('red') ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                    <div className={`p-3 rounded-2xl ${confirmColor.includes('red') || confirmColor.includes('orange') ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
                         {icon || <ChatBubbleLeftEllipsisIcon className="h-6 w-6" />}
                     </div>
                     <h3 className="text-2xl font-black text-base-900 dark:text-base-100 tracking-tighter">{title}</h3>
@@ -225,6 +231,11 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
         fetchData();
     };
 
+    const handleResetPrep = async (group: AssignedPrepareTask, itemIndex: number) => {
+        await resetItemPreparation(group, itemIndex);
+        fetchData();
+    };
+
     const handleCorrectionReturn = async (group: AssignedTask, itemIndex: number) => {
         const item = group.tasks[itemIndex];
         const categorizedTask: CategorizedTask = { id: group.requestId, category: group.category, tasks: [item], docId: group.id };
@@ -233,6 +244,50 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
         if (remaining.length > 0) await updateAssignedTask(group.id, { tasks: remaining });
         else await deleteAssignedTask(group.id);
         fetchData(); onTasksUpdated();
+    };
+
+    const handlePrepReturn = async (group: AssignedPrepareTask, itemIndex: number) => {
+        setModalConfig({
+            isOpen: true, 
+            title: "Abort Preparation", 
+            message: "คุณต้องการคืนรายการงานเตรียมชิ้นนี้กลับไปที่คิว (Pool) เพื่อจัดสรรใหม่ใช่หรือไม่?", 
+            showInput: true, 
+            inputPlaceholder: "ระบุเหตุผลการคืนงานเตรียม...", 
+            confirmText: "คืนงานรายชิ้น", 
+            confirmColor: "bg-orange-600",
+            onConfirm: async (reason) => {
+                if (!reason) return;
+                const item = { ...group.tasks[itemIndex] };
+                
+                // คืนงานแบบราย Item โดยล้างสถานะ Ready และใส่ flag คืนงาน
+                await addCategorizedTask({ 
+                    id: group.requestId, 
+                    category: group.category, 
+                    tasks: [{ 
+                        ...item, 
+                        isReturned: true, 
+                        returnReason: reason, 
+                        returnedBy: group.assistantName, 
+                        preparationStatus: null // ล้างสถานะให้กลับไปรอเตรียมใหม่
+                    }], 
+                    isReturnedPool: true, 
+                    createdAt: new Date().toISOString(), 
+                    shift: group.shift, 
+                    returnedBy: group.assistantName, 
+                    returnReason: reason 
+                } as any);
+
+                // ลบออกจากกลุ่มงานเตรียมเดิม
+                const remaining = group.tasks.filter((_, idx) => idx !== itemIndex);
+                if (remaining.length > 0) await updateAssignedPrepareTask(group.id, { tasks: remaining });
+                else await deleteAssignedPrepareTask(group.id);
+                
+                fetchData(); 
+                onTasksUpdated(); 
+                setModalConfig(p => ({ ...p, isOpen: false }));
+                setNotification({ message: "Item returned to pool", isError: false });
+            }
+        });
     };
 
     const handleTesterReturn = async (group: AssignedTask, itemIndex: number) => {
@@ -251,7 +306,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
     };
 
     const handleExport = () => {
-        // --- Sheet 1: General Assignment Log ---
         const executionData = assignedTasks.flatMap(group => 
             group.tasks.map(task => ({
                 'Type': 'Execution',
@@ -280,7 +334,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
         );
         const allData = [...executionData, ...prepData];
 
-        // --- Sheet 2: LIMS Integration Format (Exactly as requested by user) ---
         const formatLimsDate = (dateStr: string) => {
             if (!dateStr) return '';
             const [y, m, d] = dateStr.split('-');
@@ -318,7 +371,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
         const ws1 = XLSX.utils.json_to_sheet(allData);
         const ws2 = XLSX.utils.aoa_to_sheet(integrationAOA);
         
-        // Basic style: col widths for sheet 2
         ws2['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 18 }, { wch: 8 }];
 
         const wb = XLSX.utils.book_new();
@@ -375,7 +427,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
             )}
 
             <div className="flex-grow grid grid-cols-12 gap-4 h-full relative overflow-hidden">
-                {/* Personnel Sidebar - Fully Fixed height and scrollable internally */}
                 <div className="col-span-3 bg-white/40 dark:bg-base-900/40 rounded-[2rem] border border-white dark:border-base-800 shadow-sm flex flex-col overflow-hidden backdrop-blur-md h-full">
                     <div className="p-4 border-b border-white dark:border-base-800 bg-white/20 flex justify-between items-center shrink-0">
                         <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Duty Roster</h3>
@@ -399,9 +450,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                     </div>
                 </div>
 
-                {/* Main Tracking Board - Independently scrollable right side */}
                 <div className="col-span-9 bg-white/60 dark:bg-base-900/60 rounded-[2rem] border border-white dark:border-base-800 shadow-2xl flex flex-col overflow-hidden relative backdrop-blur-xl h-full">
-                    {/* Sticky Header inside the task board */}
                     <div className="px-8 py-4 border-b border-white dark:border-base-800 flex justify-between items-center bg-white/40 dark:bg-base-800/10 shrink-0 sticky top-0 z-10 backdrop-blur-md">
                         <div className="flex items-center gap-5">
                             {activePerson ? (
@@ -436,14 +485,14 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                 <div className="px-6 py-3 bg-amber-900/90 text-white border-b border-amber-800 flex justify-between items-center backdrop-blur-sm"><span className="text-[11px] font-black uppercase tracking-[0.2em]">SEQ: {group.requestId}</span></div>
                                                 <div className="p-3 space-y-2">
                                                     {group.items.map((item, idx) => {
+                                                        const isPrepared = item.task.preparationStatus === 'Prepared' || item.task.preparationStatus === 'Ready for Testing';
                                                         const hasPlannerNote = !!item.task.plannerNote;
                                                         const desc = String(getTaskValue(item.task, 'Description') || 'General Task').trim();
                                                         const qty = String(getTaskValue(item.task, 'Quantity') || '1').trim();
-                                                        const variant = String(getTaskValue(item.task, 'Variant') || '').trim();
                                                         const sampleName = String(getTaskValue(item.task, 'Sample Name') || '').trim();
 
                                                         return (
-                                                            <div key={idx} className="flex items-center justify-between p-4 bg-white dark:bg-base-800/80 rounded-[1.2rem] border border-amber-100 dark:border-amber-900/20 shadow-sm transition-all hover:shadow-md">
+                                                            <div key={idx} className={`flex items-center justify-between p-4 rounded-[1.2rem] border transition-all ${isPrepared ? 'bg-emerald-50/20 border-emerald-100' : 'bg-white dark:bg-base-800/80 border-amber-100 dark:border-amber-900/20 shadow-sm'}`}>
                                                                 <div className="flex items-center gap-4">
                                                                     <button 
                                                                         onClick={() => handleNoteClick('prep', item.sourceGroup, item.index)}
@@ -454,16 +503,30 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                                     </button>
                                                                 </div>
                                                                 <div className="flex-grow min-w-0 flex flex-row items-center gap-5 ml-2">
-                                                                    <div className={`flex-grow font-black uppercase leading-tight line-clamp-2 text-base-950 dark:text-base-100 text-[16px]`}>
+                                                                    <div className={`flex-grow font-black uppercase leading-tight line-clamp-2 ${isPrepared ? 'text-emerald-800 opacity-60' : 'text-base-950 dark:text-base-100'} text-[16px]`}>
                                                                         {desc}
                                                                     </div>
                                                                     <div className="flex flex-shrink-0 items-center gap-3">
                                                                         <div className="px-2.5 py-1 bg-amber-100 dark:bg-amber-900/50 rounded-xl text-[12px] font-black text-amber-800 border border-amber-200">x{qty}</div>
                                                                         {sampleName && sampleName !== 'N/A' && <div className="px-3 py-1 bg-base-100 dark:bg-base-700/50 rounded-xl text-[12px] font-black text-base-800 dark:text-base-200 border border-base-200 dark:border-base-600 uppercase truncate max-w-[200px]">S: {sampleName}</div>}
-                                                                        {variant && <div className="text-[12px] font-black text-amber-600 dark:text-amber-400 italic uppercase flex-shrink-0">D: {variant}</div>}
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex-shrink-0 ml-5">{item.task.preparationStatus === 'Prepared' || item.task.preparationStatus === 'Ready for Testing' ? <div className="text-emerald-700 font-black text-[10px] uppercase tracking-widest px-4 py-2 bg-emerald-50 border-2 border-emerald-100 rounded-xl shadow-inner">Prepared</div> : <button onClick={() => handleMarkPrepared(item.sourceGroup, item.index)} className="px-6 py-2.5 bg-amber-500 text-white font-black rounded-[1.2rem] shadow-xl uppercase text-[10px] tracking-widest hover:bg-amber-600 hover:scale-105 transition-all active:scale-95 border-b-4 border-amber-700">Mark Ready</button>}</div>
+                                                                <div className="flex-row items-center gap-2 flex-shrink-0 ml-5 flex">
+                                                                    {isPrepared ? (
+                                                                        <button onClick={() => handleResetPrep(item.sourceGroup, item.index)} className="px-4 py-2 bg-base-100 dark:bg-base-800 text-[10px] font-black uppercase text-base-700 dark:text-base-300 rounded-xl transition-all flex items-center gap-2 border-2 border-base-200 shadow-sm hover:bg-white">
+                                                                            <RefreshIcon className="h-4 w-4" /> Reset
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button onClick={() => handleMarkPrepared(item.sourceGroup, item.index)} className="px-6 py-2.5 bg-amber-500 text-white font-black rounded-[1.2rem] shadow-xl uppercase text-[10px] tracking-widest hover:bg-amber-600 hover:scale-105 transition-all active:scale-95 border-b-4 border-amber-700">Mark Ready</button>
+                                                                    )}
+                                                                    <button 
+                                                                        onClick={() => handlePrepReturn(item.sourceGroup, item.index)} 
+                                                                        className="p-2.5 bg-white dark:bg-base-800 text-orange-600 dark:text-orange-400 border-2 border-orange-100 dark:border-orange-900/50 rounded-xl shadow-sm hover:bg-orange-50 transition-all"
+                                                                        title="Return Preparation Item to Pool"
+                                                                    >
+                                                                        <ArrowUturnLeftIcon className="h-5 w-5" />
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         );
                                                     })}
@@ -477,7 +540,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                     <div className="space-y-4">
                                         <div className="flex items-center gap-2.5 ml-1"><div className="w-2.5 h-2.5 rounded-full bg-primary-500 shadow-md animate-pulse"></div><h4 className="text-[11px] font-black text-primary-600 uppercase tracking-[0.2em]">Active Execution Mission</h4></div>
                                         {groupedPersonTasks.map(group => (
-                                            <div key={group.requestId} className="bg-white/60 dark:bg-base-950/40 rounded-[2rem] border-2 border-base-200 dark:border-base-800 overflow-hidden shadow-lg">
+                                            <div key={group.requestId} className="bg-white/60 dark:bg-base-955/40 rounded-[2rem] border-2 border-base-200 dark:border-base-800 overflow-hidden shadow-lg">
                                                 <div className="px-6 py-3.5 bg-base-900 text-white border-b border-indigo-900/50 flex justify-between items-center"><span className="text-[11px] font-black uppercase tracking-[0.2em]">SEQ: {group.requestId}</span></div>
                                                 <div className="p-3 space-y-2.5">
                                                     {group.items.map((item, idx) => {
@@ -488,7 +551,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                         
                                                         const desc = String(getTaskValue(item.task, 'Description') || 'General Task').trim();
                                                         const qty = String(getTaskValue(item.task, 'Quantity') || '1').trim();
-                                                        const variant = String(getTaskValue(item.task, 'Variant') || '').trim();
                                                         const sampleName = String(getTaskValue(item.task, 'Sample Name') || '').trim();
 
                                                         return (
@@ -509,7 +571,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                                     <div className="flex flex-shrink-0 items-center gap-3">
                                                                         <div className={`px-2.5 py-1 rounded-xl text-[12px] font-black border flex-shrink-0 ${isDone ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : isNotOk ? 'bg-red-100 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>x{qty}</div>
                                                                         {sampleName && sampleName !== 'N/A' && <div className={`px-3 py-1 rounded-xl text-[12px] font-black border uppercase truncate max-w-[220px] flex-shrink-0 ${isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700/50' : isNotOk ? 'bg-red-50/50 border-red-200 text-red-700/50' : 'bg-indigo-100/30 border-indigo-100 text-indigo-950 dark:text-indigo-200'}`}>S: {sampleName}</div>}
-                                                                        {variant && <div className={`text-[12px] font-black uppercase italic flex-shrink-0 ${isDone ? 'text-emerald-600/40' : isNotOk ? 'text-red-600/40' : 'text-primary-600 dark:text-primary-400 opacity-90'}`}>D: {variant}</div>}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex flex-row items-center gap-2 flex-shrink-0 ml-5">

@@ -10,7 +10,7 @@ import {
     UserGroupIcon, RefreshIcon, 
     BeakerIcon, CalendarIcon,
     SunIcon, MoonIcon, DownloadIcon,
-    ChevronDownIcon
+    ChevronDownIcon, ClipboardListIcon, SparklesIcon
 } from './common/Icons';
 
 declare const XLSX: any;
@@ -62,14 +62,13 @@ const getTaskValue = (task: RawTask, header: string): string | number => {
 };
 
 const getSpecialStatus = (task: RawTask, category: TaskCategory) => {
-    const checkFields = ['Purpose', 'Priority', 'Remark (Requester)', 'Note to planer', 'Additional Information', 'Description'];
-    const allText = checkFields.map(f => String(getTaskValue(task, f)).toLowerCase()).join(' ');
-    const normalized = allText.replace(/\s/g, '');
+    const allContent = Object.values(task).map(v => String(v).toLowerCase()).join(' ');
+    
     return {
-        isSprint: normalized.includes('sprint') || String(getTaskValue(task, 'Purpose')).toLowerCase().includes('sprint'),
-        isUrgent: category === TaskCategory.Urgent || normalized.includes('urgent') || String(getTaskValue(task, 'Priority')).toLowerCase().includes('urgent'),
-        isLSP: normalized.includes('lsp'),
-        isPoCat: category === TaskCategory.PoCat || normalized.includes('pocat'),
+        isSprint: allContent.includes('sprint'),
+        isUrgent: category === TaskCategory.Urgent || allContent.includes('urgent'),
+        isLSP: allContent.includes('lsp'),
+        isPoCat: category === TaskCategory.PoCat || allContent.includes('pocat') || allContent.includes('po cat'),
         isManual: task.ManualEntry === true || category === TaskCategory.Manual
     };
 };
@@ -132,6 +131,39 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
     }, [selectedDate, selectedShift]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    const globalStats = useMemo(() => {
+        let total = 0;
+        let prep = 0;
+        let exec = 0;
+        let lsp = 0;
+        let sprint = 0;
+        let urgent = 0;
+        let pocat = 0;
+
+        const processTaskFlags = (t: RawTask, cat: TaskCategory) => {
+            const spec = getSpecialStatus(t, cat);
+            // Priority: LSP > Sprint > Urgent > PoCat
+            if (spec.isLSP) lsp++;
+            else if (spec.isSprint) sprint++;
+            else if (spec.isUrgent) urgent++;
+            else if (spec.isPoCat) pocat++;
+        };
+
+        // Counting for Special Ops flags ONLY from Execution tasks
+        assignedTasks.forEach(group => {
+            exec += group.tasks.length;
+            group.tasks.forEach(t => processTaskFlags(t, group.category));
+        });
+
+        // Preparation tasks only count towards volume, not special flags
+        prepareTasks.forEach(group => {
+            prep += group.tasks.length;
+        });
+
+        total = exec + prep;
+        return { total, prep, exec, lsp, sprint, urgent, pocat, totalSpecial: lsp + sprint + urgent + pocat };
+    }, [assignedTasks, prepareTasks]);
 
     const processedPersonnel = useMemo(() => {
         const stats: Record<string, PersonStats> = {};
@@ -197,7 +229,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
         return Object.values(stats).sort((a, b) => b.pendingTasks - a.pendingTasks);
     }, [assignedTasks, prepareTasks, poolTasks, schedule, testers, selectedShift]);
 
-    // Ensure groups are collapsed when switching personnel for maximum tidiness
     useEffect(() => {
         if (selectedPersonId) {
             setExpandedGroups(new Set());
@@ -286,13 +317,15 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
             `}</style>
 
             <div className="flex-grow grid grid-cols-12 gap-4 h-full relative overflow-hidden">
-                {/* Personnel Sidebar - Using col-span-3 to match tracking tab exactly */}
+                {/* Personnel Sidebar */}
                 <aside className="col-span-3 flex flex-col bg-white/40 dark:bg-base-900/40 rounded-[2.5rem] border border-white dark:border-base-800 shadow-sm overflow-hidden h-full backdrop-blur-md">
                     <div className="p-4 border-b border-white dark:border-base-800 bg-white/20 flex justify-between items-center shrink-0">
                         <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Duty Ops</h3>
                         <div className="w-2 h-2 rounded-full bg-primary-500 animate-pulse shadow-sm"></div>
                     </div>
-                    <div className="flex-grow overflow-y-auto no-scrollbar p-2.5 space-y-1.5">
+                    
+                    {/* Person List Area */}
+                    <div className="flex-grow overflow-y-auto no-scrollbar p-2.5 space-y-1.5 min-h-0">
                         {processedPersonnel.map(person => {
                             const isActive = selectedPersonId === person.id;
                             const isAssistant = person.role === 'ASST';
@@ -312,9 +345,78 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                             );
                         })}
                     </div>
+
+                    {/* RE-DESIGNED: Shift Stats Summary Box */}
+                    <div className="p-4 bg-white/40 dark:bg-base-950/40 border-t border-white dark:border-base-800 shrink-0 space-y-3">
+                        <div className="flex items-center gap-2 mb-1 px-1">
+                            <SparklesIcon className="h-3.5 w-3.5 text-primary-500" />
+                            <h4 className="text-[9px] font-black text-base-400 uppercase tracking-widest">Shift Analytics</h4>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            {/* Main Counts */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="p-2.5 bg-white dark:bg-base-900 rounded-xl border border-white dark:border-base-800 shadow-sm flex flex-col items-center justify-center text-center">
+                                    <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none tracking-tighter">{globalStats.total}</span>
+                                    <span className="text-[6px] font-black text-base-400 uppercase tracking-widest mt-1">Total</span>
+                                </div>
+                                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900/50 shadow-sm flex flex-col items-center justify-center text-center">
+                                    <span className="text-[14px] font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">{globalStats.prep}</span>
+                                    <span className="text-[6px] font-black text-amber-500/70 uppercase tracking-widest mt-1">Prep</span>
+                                </div>
+                                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/50 shadow-sm flex flex-col items-center justify-center text-center">
+                                    <span className="text-[14px] font-black text-emerald-600 dark:text-emerald-400 leading-none tracking-tighter">{globalStats.exec}</span>
+                                    <span className="text-[6px] font-black text-emerald-500/70 uppercase tracking-widest mt-1">Test</span>
+                                </div>
+                            </div>
+
+                            {/* Redesigned Special Ops Box - Partitioned by Priority Hierarchy */}
+                            <div className="bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border-2 border-indigo-100 dark:border-indigo-900/50 p-3 shadow-inner overflow-hidden">
+                                <div className="flex justify-between items-center mb-2.5 border-b border-indigo-100/50 dark:border-indigo-900/50 pb-1.5 px-0.5">
+                                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Special Mission Log (Test)</span>
+                                    <span className="text-[14px] font-black text-indigo-700 dark:text-indigo-400 tracking-tighter">{globalStats.totalSpecial}</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                    {/* LSP - Highest Priority */}
+                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-cyan-500"></div>
+                                            <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">LSP Focus</span>
+                                        </div>
+                                        <span className="text-[12px] font-black text-cyan-600 dark:text-cyan-400 leading-none">{globalStats.lsp}</span>
+                                    </div>
+                                    {/* Sprint */}
+                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                                            <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">Sprint Ops</span>
+                                        </div>
+                                        <span className="text-[12px] font-black text-rose-600 dark:text-rose-400 leading-none">{globalStats.sprint}</span>
+                                    </div>
+                                    {/* Urgent */}
+                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+                                            <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">Urgent List</span>
+                                        </div>
+                                        <span className="text-[12px] font-black text-orange-600 dark:text-orange-400 leading-none">{globalStats.urgent}</span>
+                                    </div>
+                                    {/* PoCat - Lowest Priority for flags */}
+                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
+                                            <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">PoCat Work</span>
+                                        </div>
+                                        <span className="text-[12px] font-black text-violet-600 dark:text-violet-400 leading-none">{globalStats.pocat}</span>
+                                    </div>
+                                </div>
+                                <p className="text-[5.5px] font-bold text-indigo-400 uppercase tracking-widest text-center mt-2 opacity-60 italic">Hierarchy: LSP > Sprint > Urgent > PoCat (Test Only)</p>
+                            </div>
+                        </div>
+                    </div>
                 </aside>
 
-                {/* Main Log Area - col-span-6.5 */}
+                {/* Main Log Area */}
                 <div className="col-span-6 flex flex-col min-w-0 bg-white/60 dark:bg-base-900/60 rounded-[2.5rem] border border-white dark:border-base-800 shadow-2xl overflow-hidden relative backdrop-blur-xl h-full">
                     {!activePerson ? (
                         <div className="flex-grow flex flex-col items-center justify-center opacity-10 text-base-300 py-20"><UserGroupIcon className="h-24 w-24 mb-4" /><span className="text-xl font-black uppercase tracking-[0.5em] text-base-400">Select Personnel</span></div>
@@ -361,6 +463,8 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                                                 <div className="flex flex-wrap gap-2 mb-2 mt-1">
                                                                     {sum.isSprint && <span className="bg-red-600 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">SPRINT</span>}
                                                                     {sum.isUrgent && <span className="bg-rose-500 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">URGENT</span>}
+                                                                    {sum.isLSP && <span className="bg-cyan-600 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">LSP</span>}
+                                                                    {sum.isPoCat && <span className="bg-violet-600 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">POCAT</span>}
                                                                     {sum.isManual && <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shadow-sm">MANUAL</span>}
                                                                 </div>
                                                                 <h3 className={`text-[16px] font-black tracking-tight uppercase whitespace-normal leading-tight transition-colors ${isComplete ? 'text-emerald-900 opacity-60' : 'text-base-950 dark:text-white'}`}>{sum.desc}</h3>
@@ -414,7 +518,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                     )}
                 </div>
 
-                {/* Config Sidebar - col-span-3 */}
+                {/* Config Sidebar */}
                 <aside className="col-span-3 flex flex-col glass-card rounded-[2.5rem] shadow-2xl p-5 overflow-hidden border border-white dark:border-base-800 h-full backdrop-blur-md">
                     <div className="flex-grow overflow-y-auto no-scrollbar space-y-6 pb-4">
                         <div className="space-y-4">

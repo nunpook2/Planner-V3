@@ -1,14 +1,32 @@
-
 import { firestore } from './firebase';
 import type { Tester, CategorizedTask, AssignedTask, DailySchedule, RawTask, AssignedPrepareTask, TestMapping, ShiftReport } from '../types';
 import { TaskCategory } from '../types';
 
 const getCollection = (collectionName: string) => firestore.collection(collectionName);
 
+// Helper to handle offline fetches gracefully
+const safeGet = async (query: any) => {
+    try {
+        return await query.get();
+    } catch (error: any) {
+        // If it's an offline error, try to fetch from cache explicitly
+        if (error.code === 'unavailable' || error.message?.includes('offline')) {
+            console.warn(`Firestore: Client is offline, attempting to fetch '${query.path || 'collection'}' from cache...`);
+            try {
+                return await query.get({ source: 'cache' });
+            } catch (cacheError) {
+                console.error("Firestore: Cache fetch failed as well.", cacheError);
+                throw error;
+            }
+        }
+        throw error;
+    }
+};
+
 // --- Tester Management ---
 export const getTesters = async (): Promise<Tester[]> => {
     if (!firestore) throw new Error("Database not initialized");
-    const snapshot = await getCollection('analysts').get();
+    const snapshot = await safeGet(getCollection('analysts'));
     return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }) as Tester);
 };
 
@@ -28,7 +46,7 @@ export const deleteTester = async (id: string): Promise<void> => {
 // --- Test Mapping Management ---
 export const getTestMappings = async (): Promise<TestMapping[]> => {
     if (!firestore) return [];
-    const snapshot = await getCollection('testMappings').get();
+    const snapshot = await safeGet(getCollection('testMappings'));
     const mappings = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }) as TestMapping);
     return mappings.sort((a, b) => {
         const orderA = a.order ?? Infinity;
@@ -56,7 +74,7 @@ export const deleteTestMapping = async (id: string): Promise<void> => {
 // --- Categorized Task Management ---
 export const getCategorizedTasks = async (): Promise<CategorizedTask[]> => {
     if (!firestore) throw new Error("Database not initialized");
-    const snapshot = await getCollection('categorizedTasks').get();
+    const snapshot = await safeGet(getCollection('categorizedTasks'));
     return snapshot.docs.map((doc: any) => ({ docId: doc.id, ...doc.data() }) as CategorizedTask);
 };
 
@@ -75,7 +93,7 @@ export const deleteCategorizedTask = async (docId: string): Promise<void> => {
 // --- Daily Schedule Management ---
 export const getDailySchedule = async (date: string): Promise<DailySchedule | null> => {
     if (!firestore) return null;
-    const doc = await getCollection('dailySchedules').doc(date).get();
+    const doc = await safeGet(getCollection('dailySchedules').doc(date));
     return doc.exists ? ({ id: doc.id, ...doc.data() } as DailySchedule) : null;
 };
 
@@ -86,7 +104,7 @@ export const saveDailySchedule = async (date: string, schedule: Omit<DailySchedu
 export const getExistingScheduleDates = async (): Promise<string[]> => {
     if (!firestore) return [];
     try {
-        const snapshot = await getCollection('dailySchedules').get();
+        const snapshot = await safeGet(getCollection('dailySchedules'));
         return snapshot.docs.map((doc: any) => doc.id);
     } catch (e) {
         console.error("Error fetching schedule dates:", e);
@@ -97,7 +115,7 @@ export const getExistingScheduleDates = async (): Promise<string[]> => {
 // --- Assigned Task Management ---
 export const getAssignedTasks = async (): Promise<AssignedTask[]> => {
     if (!firestore) throw new Error("Database not initialized");
-    const snapshot = await getCollection('assignedTasks').get();
+    const snapshot = await safeGet(getCollection('assignedTasks'));
     return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }) as AssignedTask);
 };
 
@@ -116,12 +134,17 @@ export const deleteAssignedTask = async (id: string): Promise<void> => {
 // --- Prepare Task Management ---
 export const getAssignedPrepareTasks = async (): Promise<AssignedPrepareTask[]> => {
     if (!firestore) throw new Error("Database not initialized");
-    const snapshot = await getCollection('assignedPrepareTasks').get();
+    const snapshot = await safeGet(getCollection('assignedPrepareTasks'));
     return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }) as AssignedPrepareTask);
 };
 
 export const updateAssignedPrepareTask = async (id: string, updates: Partial<AssignedPrepareTask>): Promise<void> => {
     await getCollection('assignedPrepareTasks').doc(id).update(updates);
+};
+
+// Fix: Added missing delete function for prepared tasks to resolve "firestore" not found error in ScheduleTab
+export const deleteAssignedPrepareTask = async (id: string): Promise<void> => {
+    await getCollection('assignedPrepareTasks').doc(id).delete();
 };
 
 export const assignItemsToPrepare = async (
@@ -205,6 +228,45 @@ export const markItemAsPrepared = async (prepTask: AssignedPrepareTask, itemInde
     }
 };
 
+export const resetItemPreparation = async (prepTask: AssignedPrepareTask, itemIndex: number) => {
+    const updatedPrepTasks = [...prepTask.tasks];
+    const targetItem = updatedPrepTasks[itemIndex];
+    if (!targetItem) return;
+    
+    targetItem.preparationStatus = 'Awaiting Preparation';
+    await getCollection('assignedPrepareTasks').doc(prepTask.id).update({ tasks: updatedPrepTasks });
+
+    // Sync back only if NOT manual
+    if (prepTask.category !== TaskCategory.Manual) {
+        try {
+            const originalDoc = await getCollection('categorizedTasks').doc(prepTask.originalDocId).get();
+            if (originalDoc.exists) {
+                const data = originalDoc.data() as CategorizedTask;
+                const originalTasks = [...data.tasks];
+                let foundIndex = -1;
+                
+                if (targetItem._id) {
+                    foundIndex = originalTasks.findIndex(t => t._id === targetItem._id);
+                } 
+                if (foundIndex === -1 && prepTask.originalIndices && prepTask.originalIndices[itemIndex] !== undefined) {
+                    const idx = prepTask.originalIndices[itemIndex];
+                    if (originalTasks[idx]) foundIndex = idx;
+                }
+
+                if (foundIndex !== -1) {
+                    originalTasks[foundIndex] = { 
+                        ...originalTasks[foundIndex], 
+                        preparationStatus: 'Awaiting Preparation' 
+                    } as RawTask;
+                    await getCollection('categorizedTasks').doc(prepTask.originalDocId).update({ tasks: originalTasks });
+                }
+            }
+        } catch (e) {
+            console.error("Error syncing preparation status reset:", e);
+        }
+    }
+};
+
 export const returnTaskToPool = async (categorizedTask: CategorizedTask): Promise<void> => {
     const tasksWithFlags = categorizedTask.tasks.map(t => ({
         ...t,
@@ -246,7 +308,7 @@ export const unassignTaskToPool = async (categorizedTask: CategorizedTask): Prom
 export const getShiftReport = async (date: string, shift: 'day' | 'night'): Promise<ShiftReport | null> => {
     if (!firestore) return null;
     const docId = `${date}_${shift}`;
-    const doc = await getCollection('shiftReports').doc(docId).get();
+    const doc = await safeGet(getCollection('shiftReports').doc(docId));
     return doc.exists ? ({ id: doc.id, ...doc.data() } as ShiftReport) : null;
 };
 

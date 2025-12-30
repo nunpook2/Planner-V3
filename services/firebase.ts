@@ -22,11 +22,14 @@ try {
     }
     firestore = firebase.firestore();
     
-    // Enable offline persistence immediately to prevent "client is offline" errors
+    // Enable offline persistence with multi-tab synchronization
+    // Use a more robust check for persistence availability
     firestore.enablePersistence({ synchronizeTabs: true }).catch((err: any) => {
         if (err.code === 'failed-precondition') {
-            console.warn("Firestore Persistence: Failed (multiple tabs open).");
+            // Multiple tabs open, persistence can only be enabled in one tab at a time.
+            console.warn("Firestore Persistence: Failed (multiple tabs open). Continuing without offline support.");
         } else if (err.code === 'unimplemented') {
+            // The current browser doesn't support all of the features required to enable persistence
             console.warn("Firestore Persistence: Browser not supported.");
         }
     });
