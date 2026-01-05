@@ -136,33 +136,47 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
         let total = 0;
         let prep = 0;
         let exec = 0;
-        let lsp = 0;
-        let sprint = 0;
-        let urgent = 0;
-        let pocat = 0;
+        let lspCount = 0;
+        let sprintCount = 0;
+        let urgentCount = 0;
+        let pocatCount = 0;
 
         const processTaskFlags = (t: RawTask, cat: TaskCategory) => {
             const spec = getSpecialStatus(t, cat);
-            // Priority: LSP > Sprint > Urgent > PoCat
-            if (spec.isLSP) lsp++;
-            else if (spec.isSprint) sprint++;
-            else if (spec.isUrgent) urgent++;
-            else if (spec.isPoCat) pocat++;
+            // Priority Hierarchy Logic: LSP > Sprint > Urgent > PoCat
+            if (spec.isLSP) {
+                lspCount++;
+            } else if (spec.isSprint) {
+                sprintCount++;
+            } else if (spec.isUrgent) {
+                urgentCount++;
+            } else if (spec.isPoCat) {
+                pocatCount++;
+            }
         };
 
-        // Counting for Special Ops flags ONLY from Execution tasks
+        // Counting for Special Ops flags ONLY from Execution (Test) tasks
         assignedTasks.forEach(group => {
             exec += group.tasks.length;
             group.tasks.forEach(t => processTaskFlags(t, group.category));
         });
 
-        // Preparation tasks only count towards volume, not special flags
+        // Preparation tasks only count towards volume total, not special flags per requirement
         prepareTasks.forEach(group => {
             prep += group.tasks.length;
         });
 
         total = exec + prep;
-        return { total, prep, exec, lsp, sprint, urgent, pocat, totalSpecial: lsp + sprint + urgent + pocat };
+        return { 
+            total, 
+            prep, 
+            exec, 
+            lsp: lspCount, 
+            sprint: sprintCount, 
+            urgent: urgentCount, 
+            pocat: pocatCount, 
+            totalSpecial: lspCount + sprintCount + urgentCount + pocatCount 
+        };
     }, [assignedTasks, prepareTasks]);
 
     const processedPersonnel = useMemo(() => {
@@ -346,15 +360,15 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                         })}
                     </div>
 
-                    {/* RE-DESIGNED: Shift Stats Summary Box */}
+                    {/* NEW: Redesigned Shift Stats Summary Box (Partitions) */}
                     <div className="p-4 bg-white/40 dark:bg-base-950/40 border-t border-white dark:border-base-800 shrink-0 space-y-3">
                         <div className="flex items-center gap-2 mb-1 px-1">
                             <SparklesIcon className="h-3.5 w-3.5 text-primary-500" />
-                            <h4 className="text-[9px] font-black text-base-400 uppercase tracking-widest">Shift Analytics</h4>
+                            <h4 className="text-[9px] font-black text-base-400 uppercase tracking-widest">Shift Performance</h4>
                         </div>
                         
                         <div className="space-y-2">
-                            {/* Main Counts */}
+                            {/* Main Counts Row */}
                             <div className="grid grid-cols-3 gap-2">
                                 <div className="p-2.5 bg-white dark:bg-base-900 rounded-xl border border-white dark:border-base-800 shadow-sm flex flex-col items-center justify-center text-center">
                                     <span className="text-[14px] font-black text-slate-900 dark:text-white leading-none tracking-tighter">{globalStats.total}</span>
@@ -370,39 +384,39 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                 </div>
                             </div>
 
-                            {/* Redesigned Special Ops Box - Partitioned by Priority Hierarchy */}
+                            {/* Redesigned Special Ops Box - 4 Partitions by Priority Hierarchy */}
                             <div className="bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border-2 border-indigo-100 dark:border-indigo-900/50 p-3 shadow-inner overflow-hidden">
                                 <div className="flex justify-between items-center mb-2.5 border-b border-indigo-100/50 dark:border-indigo-900/50 pb-1.5 px-0.5">
-                                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Special Mission Log (Test)</span>
+                                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Special Missions (Test Only)</span>
                                     <span className="text-[14px] font-black text-indigo-700 dark:text-indigo-400 tracking-tighter">{globalStats.totalSpecial}</span>
                                 </div>
                                 <div className="space-y-1.5">
-                                    {/* LSP - Highest Priority */}
-                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                    {/* 1. LSP - Highest Priority */}
+                                    <div className="flex items-center justify-between px-2 py-1.5 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
                                         <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-cyan-500"></div>
                                             <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">LSP Focus</span>
                                         </div>
                                         <span className="text-[12px] font-black text-cyan-600 dark:text-cyan-400 leading-none">{globalStats.lsp}</span>
                                     </div>
-                                    {/* Sprint */}
-                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                    {/* 2. Sprint */}
+                                    <div className="flex items-center justify-between px-2 py-1.5 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
                                         <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
                                             <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">Sprint Ops</span>
                                         </div>
                                         <span className="text-[12px] font-black text-rose-600 dark:text-rose-400 leading-none">{globalStats.sprint}</span>
                                     </div>
-                                    {/* Urgent */}
-                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                    {/* 3. Urgent */}
+                                    <div className="flex items-center justify-between px-2 py-1.5 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
                                         <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
                                             <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">Urgent List</span>
                                         </div>
                                         <span className="text-[12px] font-black text-orange-600 dark:text-orange-400 leading-none">{globalStats.urgent}</span>
                                     </div>
-                                    {/* PoCat - Lowest Priority for flags */}
-                                    <div className="flex items-center justify-between px-2 py-1 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
+                                    {/* 4. PoCat - Final Priority */}
+                                    <div className="flex items-center justify-between px-2 py-1.5 bg-white dark:bg-base-900/50 rounded-lg shadow-sm">
                                         <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
                                             <span className="text-[8px] font-black text-base-500 uppercase tracking-widest">PoCat Work</span>
@@ -410,14 +424,16 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                         <span className="text-[12px] font-black text-violet-600 dark:text-violet-400 leading-none">{globalStats.pocat}</span>
                                     </div>
                                 </div>
-                                <p className="text-[5.5px] font-bold text-indigo-400 uppercase tracking-widest text-center mt-2 opacity-60 italic">Hierarchy: LSP > Sprint > Urgent > PoCat (Test Only)</p>
+                                <p className="text-[5.5px] font-bold text-indigo-400 uppercase tracking-widest text-center mt-2 opacity-60 italic">
+                                    Hierarchy: LSP > Sprint > Urgent > PoCat
+                                </p>
                             </div>
                         </div>
                     </div>
                 </aside>
 
                 {/* Main Log Area */}
-                <div className="col-span-6 flex flex-col min-w-0 bg-white/60 dark:bg-base-900/60 rounded-[2.5rem] border border-white dark:border-base-800 shadow-2xl overflow-hidden relative backdrop-blur-xl h-full">
+                <div className="col-span-9 flex flex-col min-w-0 bg-white/60 dark:bg-base-900/60 rounded-[2.5rem] border border-white dark:border-base-800 shadow-2xl overflow-hidden relative backdrop-blur-xl h-full">
                     {!activePerson ? (
                         <div className="flex-grow flex flex-col items-center justify-center opacity-10 text-base-300 py-20"><UserGroupIcon className="h-24 w-24 mb-4" /><span className="text-xl font-black uppercase tracking-[0.5em] text-base-400">Select Personnel</span></div>
                     ) : (
@@ -497,7 +513,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                                                         {s.reason && (
                                                                             <div className="flex items-center gap-2.5 px-4 py-2 bg-red-700 text-white rounded-[12px] sm:ml-auto issue-badge-premium border border-red-500 shrink-0 shadow-lg w-full sm:w-auto">
                                                                                 <AlertTriangleIcon className="h-4 w-4 shrink-0" />
-                                                                                <span className="text-[11px] font-black uppercase tracking-tight leading-none whitespace-normal">
+                                                                                <span className="text-[11px] font-black uppercase tracking-tight font-black uppercase tracking-tight leading-none whitespace-normal">
                                                                                     Issue: {s.reason}
                                                                                 </span>
                                                                             </div>
@@ -517,110 +533,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                         </>
                     )}
                 </div>
-
-                {/* Config Sidebar */}
-                <aside className="col-span-3 flex flex-col glass-card rounded-[2.5rem] shadow-2xl p-5 overflow-hidden border border-white dark:border-base-800 h-full backdrop-blur-md">
-                    <div className="flex-grow overflow-y-auto no-scrollbar space-y-6 pb-4">
-                        <div className="space-y-4">
-                            <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Configuration</h3>
-                            <div className="flex flex-col gap-2.5">
-                                <label className="relative flex items-center gap-4 p-4 rounded-[1.5rem] bg-white dark:bg-white/5 border border-white dark:border-base-800 cursor-pointer shadow-sm group overflow-hidden transition-all hover:border-primary-300">
-                                    <CalendarIcon className="h-6 w-6 text-primary-500" />
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] font-black text-base-400 uppercase leading-none mb-1">Target Date</span>
-                                        <span className="text-[14px] font-black text-base-900 dark:text-white tracking-tight">{new Date(selectedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                                    </div>
-                                    <input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer z-[100] w-full h-full block full-click-date-input" />
-                                </label>
-                                <div className="flex p-1 bg-white/50 dark:bg-base-900/50 rounded-[1.5rem] border border-white dark:border-base-800 shadow-inner">
-                                    <button onClick={() => onShiftChange('day')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedShift === 'day' ? 'bg-white dark:bg-base-700 text-amber-600 shadow-md ring-1 ring-black/5' : 'text-base-400 hover:text-base-600'}`}><SunIcon className="h-4 w-4" /> Day</button>
-                                    <button onClick={() => onShiftChange('night')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedShift === 'night' ? 'bg-white dark:bg-base-700 text-indigo-600 shadow-md ring-1 ring-black/5' : 'text-base-400 hover:text-base-600'}`}><MoonIcon className="h-4 w-4" /> Night</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {shiftReport && (
-                            <div className="space-y-5 pt-2 animate-fade-in">
-                                <div className="space-y-3">
-                                    <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Systems</h3>
-                                    <div className="flex flex-col gap-2">
-                                        <button 
-                                            onClick={() => handleUpdateReport({ instruments: [{ name: 'Lab Systems', status: shiftReport.instruments[0].status === 'normal' ? 'abnormal' : 'normal' }] })}
-                                            className={`w-full p-4 rounded-[1.3rem] border flex items-center justify-between transition-all shadow-sm ${shiftReport.instruments[0].status === 'normal' ? 'bg-emerald-50/40 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700 animate-pulse'}`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-2.5 h-2.5 rounded-full ${shiftReport.instruments[0].status === 'normal' ? 'bg-emerald-500 shadow-sm' : 'bg-red-500 shadow-md'}`}></div>
-                                                <span className="font-black uppercase text-[11px] tracking-widest">Lab Systems</span>
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase">{shiftReport.instruments[0].status}</span>
-                                        </button>
-                                        {shiftReport.instruments[0].status === 'abnormal' && (
-                                            <textarea 
-                                                value={shiftReport.infrastructureNote || ''}
-                                                onChange={e => handleUpdateReport({ infrastructureNote: e.target.value })}
-                                                placeholder="Describe system issue..."
-                                                className="w-full p-4 rounded-[1.2rem] bg-red-50/50 border border-red-100 text-[11px] font-bold outline-none focus:ring-2 focus:ring-red-200 dark:bg-base-900 shadow-inner"
-                                                rows={2}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Waste</h3>
-                                    <div className="grid grid-cols-3 gap-2 p-1.5 bg-white/50 dark:bg-base-900/50 rounded-[1.5rem] border border-white dark:border-base-800 shadow-inner">
-                                        {(['low', 'medium', 'high'] as const).map(lvl => {
-                                            const isActive = shiftReport.wasteLevel === lvl;
-                                            let activeColor = 'bg-primary-600';
-                                            if (lvl === 'low') activeColor = 'bg-emerald-600';
-                                            if (lvl === 'medium') activeColor = 'bg-amber-500';
-                                            if (lvl === 'high') activeColor = 'bg-red-600';
-
-                                            return (
-                                                <button 
-                                                    key={lvl}
-                                                    onClick={() => handleUpdateReport({ wasteLevel: lvl })}
-                                                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${isActive ? `${activeColor} text-white shadow-md scale-105` : 'text-base-400 hover:text-base-600'}`}
-                                                >
-                                                    {lvl}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Hygiene</h3>
-                                    <div className="flex flex-col gap-2.5">
-                                        <div className="flex p-1 bg-white/50 dark:bg-base-900/50 rounded-[1.5rem] border border-white dark:border-base-800 shadow-inner">
-                                            {(['good', 'bad'] as const).map(c => (
-                                                <button 
-                                                    key={c}
-                                                    onClick={() => handleUpdateReport({ cleanliness: c })}
-                                                    className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${shiftReport.cleanliness === c ? (c === 'good' ? 'bg-emerald-600 text-white shadow-md' : 'bg-red-600 text-white shadow-md') : 'text-base-400 hover:text-base-600'}`}
-                                                >
-                                                    {c}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <textarea 
-                                            value={shiftReport.cleanlinessNote || ''}
-                                            onChange={e => handleUpdateReport({ cleanlinessNote: e.target.value })}
-                                            placeholder="Area notes (optional)"
-                                            className="w-full p-4 rounded-[1.2rem] bg-white dark:bg-base-900 border border-base-100 dark:border-base-800 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary-100 shadow-inner"
-                                            rows={2}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    <div className="pt-4 border-t border-base-100 dark:border-base-800 shrink-0">
-                        <button onClick={handleSaveReport} disabled={isSaving} className="w-full py-4 bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-700 hover:to-indigo-700 text-white font-black rounded-[1.5rem] shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-[0.15em] text-[13px] active:scale-95 disabled:opacity-50">
-                            {isSaving ? 'Syncing...' : <><CheckCircleIcon className="h-6 w-6"/> Sync Summary</>}
-                        </button>
-                    </div>
-                </aside>
             </div>
 
             {notification && (
