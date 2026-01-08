@@ -424,7 +424,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                                     </div>
                                 </div>
                                 <p className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest text-center mt-3 opacity-60 italic leading-relaxed">
-                                    Hierarchy: LSP > Sprint > Urgent > PoCat
+                                    Hierarchy: LSP &gt; Sprint &gt; Urgent &gt; PoCat
                                 </p>
                             </div>
                         </div>
