@@ -55,7 +55,7 @@ const LocalModal: React.FC<{
                     <h3 className="text-2xl font-black text-base-900 dark:text-base-100 tracking-tighter">{title}</h3>
                 </div>
 
-                {!isTextArea && <p className="text-sm font-medium text-base-600 dark:text-base-300 leading-relaxed whitespace-pre-wrap px-1">{message}</p>}
+                {!isTextArea && <p className="text-base font-medium text-base-600 dark:text-base-300 leading-relaxed whitespace-pre-wrap px-1">{message}</p>}
                 
                 {showInput && (
                     <div className="relative group">
@@ -75,7 +75,7 @@ const LocalModal: React.FC<{
                                 value={val} 
                                 onChange={e => setVal(e.target.value)} 
                                 placeholder={inputPlaceholder} 
-                                className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-sm transition-all" 
+                                className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-[16px] transition-all" 
                                 onKeyDown={e => { if (e.key === 'Enter' && val.trim()) onConfirm(val); }} 
                             />
                         )}
@@ -105,7 +105,6 @@ const getTaskValue = (task: RawTask, header: string): any => {
     return matchedKey ? task[matchedKey] : '';
 };
 
-// Fix for line 108: Define missing ScheduleTabProps interface
 interface ScheduleTabProps {
     testers: Tester[];
     onTasksUpdated: () => void;
@@ -461,21 +460,24 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
             <div className="flex-grow grid grid-cols-12 gap-4 h-full relative overflow-hidden">
                 <div className="col-span-3 bg-white/40 dark:bg-base-900/40 rounded-[2rem] border border-white dark:border-base-800 shadow-sm flex flex-col overflow-hidden backdrop-blur-md h-full">
                     <div className="p-4 border-b border-white dark:border-base-800 bg-white/20 flex justify-between items-center shrink-0">
-                        <h3 className="text-[10px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Duty Roster</h3>
+                        <h3 className="text-[11px] font-black text-base-400 uppercase tracking-[0.4em] ml-1">Duty Roster</h3>
                         <button onClick={handleExport} title="Export Detailed Log" className="p-2 bg-white dark:bg-base-800 border border-base-200 dark:border-base-700 rounded-xl hover:bg-base-50 transition-colors shadow-sm">
                             <DownloadIcon className="h-4 w-4 text-base-500" />
                         </button>
                     </div>
-                    <div className="flex-grow overflow-y-auto no-scrollbar p-2.5 space-y-1.5">
+                    <div className="flex-grow overflow-y-auto no-scrollbar p-2.5 space-y-2">
                         {testers.filter(t => assignedTasks.some(at => at.testerId === t.id) || prepareTasks.some(pt => pt.assistantId === t.id)).map(tester => {
                             const isActive = activePersonId === tester.id;
                             const isAssistant = tester.team === 'assistants_4_2';
                             const count = assignedTasks.filter(at => at.testerId === tester.id).reduce((acc, g) => acc + g.tasks.length, 0) + prepareTasks.filter(pt => pt.assistantId === tester.id).reduce((acc, g) => acc + g.tasks.length, 0);
                             return (
-                                <button key={tester.id} onClick={() => setActivePersonId(tester.id)} className={`w-full group flex items-center gap-3 p-3 rounded-[1.3rem] transition-all duration-300 border text-left ${isActive ? 'bg-gradient-to-r from-primary-600 to-indigo-600 border-primary-500 text-white shadow-lg active-glow scale-[1.02]' : 'bg-white/40 dark:bg-base-900/40 hover:bg-white dark:hover:bg-base-800 border-transparent hover:border-base-200 dark:hover:border-base-700'}`}>
-                                    <div className={`w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center text-[11px] font-black shadow-inner ${isAssistant ? 'person-avatar assistant' : 'person-avatar'} ${isActive ? 'ring-2 ring-white/40' : 'text-white'}`}>{tester.name.substring(0, 2).toUpperCase()}</div>
-                                    <div className="flex-grow min-w-0"><span className={`block text-[14px] font-black tracking-tight truncate leading-none ${isActive ? 'text-white' : 'text-base-800 dark:text-base-100'}`}>{tester.name}</span><span className={`text-[8px] font-bold uppercase tracking-widest mt-1 ${isActive ? 'text-white/60' : 'text-base-400'}`}>{isAssistant ? 'Assistant' : 'Analyst'}</span></div>
-                                    {count > 0 && <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${isActive ? 'bg-white text-primary-600 shadow-md' : 'bg-primary-50 text-white'}`}>{count}</div>}
+                                <button key={tester.id} onClick={() => setActivePersonId(tester.id)} className={`w-full group flex items-center gap-4 p-4 rounded-[1.5rem] transition-all duration-300 border text-left ${isActive ? 'bg-gradient-to-r from-primary-600 to-indigo-600 border-primary-500 text-white shadow-lg active-glow scale-[1.02]' : 'bg-white/40 dark:bg-base-900/40 hover:bg-white dark:hover:bg-base-800 border-transparent hover:border-base-200 dark:hover:border-base-700'}`}>
+                                    <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-[12px] font-black shadow-inner ${isAssistant ? 'person-avatar assistant' : 'person-avatar'} ${isActive ? 'ring-2 ring-white/40' : 'text-white'}`}>{tester.name.substring(0, 2).toUpperCase()}</div>
+                                    <div className="flex-grow min-w-0">
+                                        <span className={`block text-[16px] font-black tracking-tight truncate leading-none ${isActive ? 'text-white' : 'text-base-800 dark:text-base-100'}`}>{tester.name}</span>
+                                        <span className={`text-[11px] font-bold uppercase tracking-widest mt-1.5 block ${isActive ? 'text-white/60' : 'text-base-400'}`}>{isAssistant ? 'Assistant' : 'Analyst'}</span>
+                                    </div>
+                                    {count > 0 && <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${isActive ? 'bg-white text-primary-600 shadow-md' : 'bg-red-500 text-white shadow-sm'}`}>{count}</div>}
                                 </button>
                             );
                         })}
@@ -492,7 +494,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                     </div>
                                     <div>
                                         <h2 className="text-2xl font-black text-base-900 dark:text-white tracking-tighter leading-none">{activePerson.name}</h2>
-                                        <p className="text-[10px] text-base-400 font-bold uppercase tracking-[0.3em] mt-1.5">Operational Tasks Control</p>
+                                        <p className="text-[11px] text-base-400 font-bold uppercase tracking-[0.3em] mt-1.5">Operational Tasks Control</p>
                                     </div>
                                 </>
                             ) : (
@@ -501,7 +503,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                 </div>
                             )}
                         </div>
-                        <div className="flex gap-2.5 bg-white/60 dark:bg-base-800/60 p-2 rounded-2xl border border-white dark:border-base-700 shadow-inner relative"><input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="bg-transparent border-none text-[12px] font-black focus:ring-0 cursor-pointer p-1 min-w-[140px] dark:text-white" /><select value={selectedShift} onChange={e => onShiftChange(e.target.value as any)} className="bg-transparent border-none text-[10px] font-black focus:ring-0 cursor-pointer p-1 uppercase dark:text-white tracking-widest"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
+                        <div className="flex gap-2.5 bg-white/60 dark:bg-base-800/60 p-2 rounded-2xl border border-white dark:border-base-700 shadow-inner relative"><input type="date" value={selectedDate} onChange={e => onDateChange(e.target.value)} className="bg-transparent border-none text-[13px] font-black focus:ring-0 cursor-pointer p-1 min-w-[140px] dark:text-white" /><select value={selectedShift} onChange={e => onShiftChange(e.target.value as any)} className="bg-transparent border-none text-[11px] font-black focus:ring-0 cursor-pointer p-1 uppercase dark:text-white tracking-widest"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
                     </div>
 
                     <div className="flex-grow overflow-y-auto no-scrollbar p-8 space-y-8">
@@ -618,7 +620,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                                     </div>
                                                                     <div className="flex flex-shrink-0 items-center gap-3">
                                                                         <div className={`px-2.5 py-1 rounded-xl text-[12px] font-black border flex-shrink-0 ${isDone ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : isNotOk ? 'bg-red-100 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>x{qty}</div>
-                                                                        {sampleName && sampleName !== 'N/A' && <div className={`px-3 py-1 rounded-xl text-[12px] font-black border uppercase whitespace-normal leading-tight flex-shrink-0 ${isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700/50' : isNotOk ? 'bg-red-50/50 border-red-200 text-red-700/50' : 'bg-indigo-100/30 border-indigo-100 text-indigo-950 dark:text-indigo-200'}`}>S: {sampleName}</div>}
+                                                                        {sampleName && sampleName !== 'N/A' && <div className={`px-3 py-1 rounded-xl text-[12px] font-black border uppercase whitespace-normal leading-tight flex-shrink-0 ${isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700/50' : isNotOk ? 'bg-red-50/50 border-red-200 text-red-700/50' : 'bg-indigo-100/30 border-indigo-100 text-indigo-955 dark:text-indigo-200'}`}>S: {sampleName}</div>}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex flex-row items-center gap-2 flex-shrink-0 ml-5">
