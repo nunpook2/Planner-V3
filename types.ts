@@ -23,6 +23,7 @@ export interface RawTask {
     returnReason?: string | null;
     returnedBy?: string | null;
     plannerNote?: string | null; // Added for custom notes by planner
+    analystRemark?: string | null; // New: Remark from the analyst/tester during work
 }
 
 export interface Tester {

@@ -18,15 +18,6 @@ import {
 
 declare const XLSX: any;
 
-interface ScheduleTabProps {
-    testers: Tester[];
-    onTasksUpdated: () => void;
-    selectedDate: string;
-    onDateChange: (date: string) => void;
-    selectedShift: 'day' | 'night';
-    onShiftChange: (shift: 'day' | 'night') => void;
-}
-
 const LocalModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -114,6 +105,16 @@ const getTaskValue = (task: RawTask, header: string): any => {
     return matchedKey ? task[matchedKey] : '';
 };
 
+// Fix for line 108: Define missing ScheduleTabProps interface
+interface ScheduleTabProps {
+    testers: Tester[];
+    onTasksUpdated: () => void;
+    selectedDate: string;
+    onDateChange: (date: string) => void;
+    selectedShift: 'day' | 'night';
+    onShiftChange: (shift: 'day' | 'night') => void;
+}
+
 const ScheduleTab: React.FC<ScheduleTabProps> = ({ 
     testers, 
     onTasksUpdated, 
@@ -188,6 +189,19 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
         setNotification({ message: "Instruction Updated", isError: false });
     };
 
+    const handleUpdateRemark = async (type: 'exec' | 'prep', group: any, itemIndex: number, remark: string) => {
+        const updatedItems = [...group.tasks];
+        updatedItems[itemIndex] = { ...updatedItems[itemIndex], analystRemark: remark.trim() || null };
+        if (type === 'exec') {
+            await updateAssignedTask(group.id, { tasks: updatedItems });
+        } else {
+            await updateAssignedPrepareTask(group.id, { tasks: updatedItems });
+        }
+        fetchData();
+        setModalConfig(p => ({ ...p, isOpen: false }));
+        setNotification({ message: "Analyst Note Recorded", isError: false });
+    };
+
     const handleNoteClick = (type: 'exec' | 'prep', group: any, itemIndex: number) => {
         const currentNote = group.tasks[itemIndex].plannerNote || '';
         setModalConfig({
@@ -200,6 +214,22 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
             confirmText: "Save Mission", 
             confirmColor: "bg-indigo-600",
             onConfirm: (note) => handleUpdateNote(type, group, itemIndex, note || '')
+        });
+    };
+
+    const handleRemarkClick = (type: 'exec' | 'prep', group: any, itemIndex: number) => {
+        const currentRemark = group.tasks[itemIndex].analystRemark || '';
+        setModalConfig({
+            isOpen: true, 
+            title: "Analyst Shift Remark", 
+            message: currentRemark, 
+            showInput: true, 
+            isTextArea: true,
+            inputPlaceholder: "Record observations, samples issues, or work completion details here...", 
+            confirmText: "Save Note", 
+            confirmColor: "bg-emerald-600",
+            icon: <ClipboardListIcon className="h-6 w-6 text-emerald-600" />,
+            onConfirm: (remark) => handleUpdateRemark(type, group, itemIndex, remark || '')
         });
     };
 
@@ -266,7 +296,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                     tasks: [{ 
                         ...item, 
                         isReturned: true, 
-                        returnReason: reason, 
+                        returnReason: `Preparation: ${reason}`, 
                         returnedBy: group.assistantName, 
                         preparationStatus: null // ล้างสถานะให้กลับไปรอเตรียมใหม่
                     }], 
@@ -296,7 +326,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
             onConfirm: async (reason) => {
                 if (!reason) return;
                 const item = group.tasks[itemIndex];
-                await addCategorizedTask({ id: group.requestId, category: group.category, tasks: [{ ...item, isReturned: true, returnReason: reason, returnedBy: group.testerName }], isReturnedPool: true, createdAt: new Date().toISOString(), shift: group.shift, returnedBy: group.testerName, returnReason: reason, returnedDate: group.assignedDate } as any);
+                await addCategorizedTask({ id: group.requestId, category: group.category, tasks: [{ ...item, isReturned: true, returnReason: `Testing: ${reason}`, returnedBy: group.testerName }], isReturnedPool: true, createdAt: new Date().toISOString(), shift: group.shift, returnedBy: group.testerName, returnReason: reason, returnedDate: group.assignedDate } as any);
                 const remaining = group.tasks.filter((_, idx) => idx !== itemIndex);
                 if (remaining.length > 0) await updateAssignedTask(group.id, { tasks: remaining });
                 else await deleteAssignedTask(group.id);
@@ -316,7 +346,8 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                 'Sample Name': getTaskValue(task, 'Sample Name'),
                 'Variant': getTaskValue(task, 'Variant'),
                 'Status': task.status || 'Pending',
-                'Planner Note': task.plannerNote || ''
+                'Planner Note': task.plannerNote || '',
+                'Analyst Remark': task.analystRemark || ''
             }))
         );
         const prepData = prepareTasks.flatMap(group => 
@@ -329,7 +360,8 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                 'Sample Name': getTaskValue(task, 'Sample Name'),
                 'Variant': getTaskValue(task, 'Variant'),
                 'Status': task.preparationStatus || 'Awaiting',
-                'Planner Note': task.plannerNote || ''
+                'Planner Note': task.plannerNote || '',
+                'Analyst Remark': task.analystRemark || ''
             }))
         );
         const allData = [...executionData, ...prepData];
@@ -487,28 +519,36 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                     {group.items.map((item, idx) => {
                                                         const isPrepared = item.task.preparationStatus === 'Prepared' || item.task.preparationStatus === 'Ready for Testing';
                                                         const hasPlannerNote = !!item.task.plannerNote;
+                                                        const hasAnalystRemark = !!item.task.analystRemark;
                                                         const desc = String(getTaskValue(item.task, 'Description') || 'General Task').trim();
                                                         const qty = String(getTaskValue(item.task, 'Quantity') || '1').trim();
                                                         const sampleName = String(getTaskValue(item.task, 'Sample Name') || '').trim();
 
                                                         return (
                                                             <div key={idx} className={`flex items-center justify-between p-4 rounded-[1.2rem] border transition-all ${isPrepared ? 'bg-emerald-50/20 border-emerald-100' : 'bg-white dark:bg-base-800/80 border-amber-100 dark:border-amber-900/20 shadow-sm'}`}>
-                                                                <div className="flex items-center gap-4">
+                                                                <div className="flex items-center gap-2 flex-shrink-0">
                                                                     <button 
                                                                         onClick={() => handleNoteClick('prep', item.sourceGroup, item.index)}
-                                                                        className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-lg border-2 ${hasPlannerNote ? 'bg-red-600 border-red-400 text-white luxury-red-pulse' : 'bg-base-50 dark:bg-base-950 border-base-100 dark:border-base-800 text-base-300 hover:text-base-600 hover:border-indigo-300'}`}
+                                                                        className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-lg border-2 ${hasPlannerNote ? 'bg-red-600 border-red-400 text-white luxury-red-pulse' : 'bg-base-50 dark:bg-base-950 border-base-100 dark:border-base-800 text-base-300 hover:text-base-600 hover:border-indigo-300'}`}
                                                                         title={hasPlannerNote ? "Read Mission Instruction" : "Add Mission Briefing"}
                                                                     >
                                                                         <ChatBubbleLeftEllipsisIcon className="h-5 w-5" />
                                                                     </button>
+                                                                    <button 
+                                                                        onClick={() => handleRemarkClick('prep', item.sourceGroup, item.index)}
+                                                                        className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shadow-lg border-2 ${hasAnalystRemark ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-500/20' : 'bg-base-50 dark:bg-base-950 border-base-100 dark:border-base-800 text-base-300 hover:text-emerald-600 hover:border-emerald-300'}`}
+                                                                        title="Add/Edit Shift Observations"
+                                                                    >
+                                                                        <ClipboardListIcon className="h-5 w-5" />
+                                                                    </button>
                                                                 </div>
-                                                                <div className="flex-grow min-w-0 flex flex-row items-center gap-5 ml-2">
+                                                                <div className="flex-grow min-w-0 flex flex-row items-center gap-5 ml-4">
                                                                     <div className={`flex-grow font-black uppercase leading-tight line-clamp-2 ${isPrepared ? 'text-emerald-800 opacity-60' : 'text-base-950 dark:text-base-100'} text-[16px]`}>
                                                                         {desc}
                                                                     </div>
                                                                     <div className="flex flex-shrink-0 items-center gap-3">
                                                                         <div className="px-2.5 py-1 bg-amber-100 dark:bg-amber-900/50 rounded-xl text-[12px] font-black text-amber-800 border border-amber-200">x{qty}</div>
-                                                                        {sampleName && sampleName !== 'N/A' && <div className="px-3 py-1 bg-base-100 dark:bg-base-700/50 rounded-xl text-[12px] font-black text-base-800 dark:text-base-200 border border-base-200 dark:border-base-600 uppercase truncate max-w-[200px]">S: {sampleName}</div>}
+                                                                        {sampleName && sampleName !== 'N/A' && <div className="px-3 py-1 bg-base-100 dark:bg-base-700/50 rounded-xl text-[12px] font-black text-base-800 dark:text-base-200 border border-base-200 dark:border-base-600 uppercase whitespace-normal leading-tight">S: {sampleName}</div>}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex-row items-center gap-2 flex-shrink-0 ml-5 flex">
@@ -548,6 +588,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
                                                         const isNotOk = item.task.status === TaskStatus.NotOK;
                                                         const isActioned = isDone || isNotOk;
                                                         const hasPlannerNote = !!item.task.plannerNote;
+                                                        const hasAnalystRemark = !!item.task.analystRemark;
                                                         
                                                         const desc = String(getTaskValue(item.task, 'Description') || 'General Task').trim();
                                                         const qty = String(getTaskValue(item.task, 'Quantity') || '1').trim();
@@ -555,22 +596,29 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({
 
                                                         return (
                                                             <div key={idx} className={`p-4 rounded-[1.3rem] border-2 transition-all duration-500 flex items-center justify-between gap-4 ${isDone ? 'bg-emerald-50/40 border-emerald-100 shadow-sm' : isNotOk ? 'bg-red-50/40 border-red-100 shadow-sm' : 'bg-white dark:bg-base-900 border-base-100 dark:border-base-700 shadow-md hover:border-primary-300'}`}>
-                                                                <div className="flex items-center gap-4">
+                                                                <div className="flex items-center gap-2 flex-shrink-0">
                                                                     <button 
                                                                         onClick={() => handleNoteClick('exec', item.sourceGroup, item.index)}
-                                                                        className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-lg border-2 ${hasPlannerNote ? 'bg-red-600 border-red-400 text-white luxury-red-pulse' : 'bg-base-50 dark:bg-base-950 border-base-100 dark:border-base-800 text-base-300 hover:text-base-600 hover:border-indigo-300'}`}
+                                                                        className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-lg border-2 ${hasPlannerNote ? 'bg-red-600 border-red-400 text-white luxury-red-pulse' : 'bg-base-50 dark:bg-base-950 border-base-100 dark:border-base-800 text-base-300 hover:text-base-600 hover:border-indigo-300'}`}
                                                                         title={hasPlannerNote ? "Read Mission Instruction" : "Add Mission Briefing"}
                                                                     >
                                                                         <ChatBubbleLeftEllipsisIcon className="h-5 w-5" />
                                                                     </button>
+                                                                    <button 
+                                                                        onClick={() => handleRemarkClick('exec', item.sourceGroup, item.index)}
+                                                                        className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shadow-lg border-2 ${hasAnalystRemark ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-500/20' : 'bg-base-50 dark:bg-base-950 border-base-100 dark:border-base-800 text-base-300 hover:text-emerald-600 hover:border-emerald-300'}`}
+                                                                        title="Add/Edit Shift Observations"
+                                                                    >
+                                                                        <ClipboardListIcon className="h-5 w-5" />
+                                                                    </button>
                                                                 </div>
-                                                                <div className="flex-grow min-w-0 flex flex-row items-center gap-5 ml-2">
+                                                                <div className="flex-grow min-w-0 flex flex-row items-center gap-5 ml-4">
                                                                     <div className={`flex-grow font-black uppercase leading-tight line-clamp-2 ${isDone ? 'text-emerald-800 opacity-60' : isNotOk ? 'text-red-800 opacity-60' : 'text-base-950 dark:text-base-100'} text-[16px]`}>
                                                                         {desc}
                                                                     </div>
                                                                     <div className="flex flex-shrink-0 items-center gap-3">
                                                                         <div className={`px-2.5 py-1 rounded-xl text-[12px] font-black border flex-shrink-0 ${isDone ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : isNotOk ? 'bg-red-100 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>x{qty}</div>
-                                                                        {sampleName && sampleName !== 'N/A' && <div className={`px-3 py-1 rounded-xl text-[12px] font-black border uppercase truncate max-w-[220px] flex-shrink-0 ${isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700/50' : isNotOk ? 'bg-red-50/50 border-red-200 text-red-700/50' : 'bg-indigo-100/30 border-indigo-100 text-indigo-950 dark:text-indigo-200'}`}>S: {sampleName}</div>}
+                                                                        {sampleName && sampleName !== 'N/A' && <div className={`px-3 py-1 rounded-xl text-[12px] font-black border uppercase whitespace-normal leading-tight flex-shrink-0 ${isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700/50' : isNotOk ? 'bg-red-50/50 border-red-200 text-red-700/50' : 'bg-indigo-100/30 border-indigo-100 text-indigo-950 dark:text-indigo-200'}`}>S: {sampleName}</div>}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex flex-row items-center gap-2 flex-shrink-0 ml-5">

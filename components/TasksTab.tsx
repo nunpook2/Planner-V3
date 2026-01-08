@@ -13,7 +13,7 @@ import {
     getTestMappings,
     addCategorizedTask as saveCategorizedTask
 } from '../services/dataService';
-import { CheckCircleIcon, ChevronDownIcon, TrashIcon, AlertTriangleIcon, RefreshIcon, PlusIcon, DragHandleIcon, DownloadIcon, ArrowUturnLeftIcon, ChatBubbleLeftEllipsisIcon, SparklesIcon, XCircleIcon, BeakerIcon } from './common/Icons';
+import { CheckCircleIcon, ChevronDownIcon, TrashIcon, AlertTriangleIcon, RefreshIcon, PlusIcon, DragHandleIcon, DownloadIcon, ArrowUturnLeftIcon, ChatBubbleLeftEllipsisIcon, SparklesIcon, XCircleIcon, BeakerIcon, ClipboardListIcon } from './common/Icons';
 
 declare const XLSX: any;
 
@@ -153,34 +153,37 @@ const ManualTaskModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: 
             <div className="bg-white dark:bg-base-800 rounded-[2rem] shadow-2xl p-8 w-full max-md m-4 space-y-5 animate-slide-in-up border border-base-200 dark:border-base-700" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-4 mb-2">
                     <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600">
-                        <PlusIcon className="h-6 w-6" />
+                        <BeakerIcon className="h-6 w-6" />
                     </div>
-                    <h2 className="text-2xl font-black text-base-900 dark:text-base-100 tracking-tighter">Add Manual Task</h2>
+                    <div className="flex flex-col">
+                        <h2 className="text-2xl font-black text-base-900 dark:text-base-100 tracking-tighter">Add Ad-hoc Work</h2>
+                        <p className="text-[10px] font-black text-base-400 uppercase tracking-widest">Manual entry for laboratory support tasks</p>
+                    </div>
                 </div>
                 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Job Number / เลขงาน</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Task Title / ชื่องาน</label>
                         <input 
                             type="text" 
                             value={jobId} 
                             onChange={e => setJobId(e.target.value)} 
-                            placeholder="M-2024-XXX"
+                            placeholder="e.g. Glassware Washing, ICP Prep..."
                             className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-sm transition-all"
                         />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Description / รายละเอียดงาน</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Details / รายละเอียดงาน</label>
                         <textarea 
                             value={description} 
                             onChange={e => setDescription(e.target.value)} 
-                            placeholder="e.g. Clean glassware, help sample prep..."
+                            placeholder="Type specific instructions or context..."
                             rows={3}
                             className="w-full p-4 bg-base-50 dark:bg-base-950 border-2 border-base-100 dark:border-base-800 rounded-2xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none dark:text-white font-bold text-sm transition-all resize-none"
                         />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Quantity / จำนวน</label>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-base-400 mb-1.5 ml-1">Volume / จำนวน</label>
                         <input 
                             type="text" 
                             value={quantity} 
@@ -194,10 +197,10 @@ const ManualTaskModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: 
                     <button onClick={onClose} disabled={isProcessing} className="px-6 py-3 text-[11px] font-black text-base-400 hover:text-base-800 dark:hover:text-white uppercase tracking-widest transition-colors">Cancel</button>
                     <button 
                         onClick={() => onSave({ jobId, description, quantity })} 
-                        disabled={isProcessing || !jobId.trim() || !description.trim()}
+                        disabled={isProcessing || !jobId.trim()}
                         className="px-8 py-3.5 bg-primary-600 text-white font-black rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all uppercase tracking-widest text-[11px] disabled:opacity-50"
                     >
-                        {isProcessing ? 'Saving...' : 'Create Task'}
+                        {isProcessing ? 'Saving...' : 'Deploy Task'}
                     </button>
                 </div>
             </div>
@@ -307,7 +310,7 @@ const ExpandableCell: React.FC<{
                 </span>
                 
                 <div className="flex justify-center gap-1 mt-1">
-                    {hasReturned && <div className="w-1.5 h-1.5 rounded-full bg-red-600 shadow-sm animate-pulse" title="คืนงานเตรียม - รอจัดสรรใหม่"></div>}
+                    {hasReturned && <div className="w-1.5 h-1.5 rounded-full bg-red-600 shadow-sm animate-pulse" title="คืนงาน - รอจัดสรรใหม่"></div>}
                     {hasPlannerNote && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-sm" title="Has Planner Note"></div>}
                     {hasAwaitingPrep && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-sm" title="Awaiting Preparation"></div>}
                     {hasPrepared && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" title="Ready for Testing"></div>}
@@ -356,7 +359,7 @@ const ExpandableCell: React.FC<{
                                             <td className="p-4">
                                                 <div className="flex flex-wrap items-baseline justify-between mb-2">
                                                     <div className="flex items-center gap-2.5">
-                                                        <span className={`font-black text-[14px] uppercase tracking-tight leading-none truncate max-w-[200px] ${isReturned ? 'text-red-700 dark:text-red-300' : 'text-base-950 dark:text-base-50'}`}>{sampleName}</span>
+                                                        <span className={`font-black text-[14px] uppercase tracking-tight leading-none whitespace-normal ${isReturned ? 'text-red-700 dark:text-red-300' : 'text-base-950 dark:text-base-50'}`}>{sampleName}</span>
                                                         <span className="px-2 py-0.5 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg text-[10px] font-black border border-primary-100/50">x{qty}</span>
                                                     </div>
                                                     <div className="flex gap-1.5">
@@ -364,8 +367,8 @@ const ExpandableCell: React.FC<{
                                                         {isPrepReady && <span className="px-2 py-0.5 bg-emerald-600 text-white text-[8px] rounded-lg uppercase font-black tracking-widest shadow-sm">Ready</span>}
                                                         {isReturned && (
                                                             <div className="flex flex-col items-end">
-                                                                <span className="px-2.5 py-1 bg-red-600 text-white text-[9px] rounded-lg uppercase font-black tracking-widest shadow-lg animate-pulse border border-red-400">คืนงานเตรียม</span>
-                                                                <span className="text-[7px] font-black text-red-500 uppercase mt-0.5 tracking-[0.1em]">รอส่งไปเตรียมใหม่</span>
+                                                                <span className="px-2.5 py-1 bg-red-600 text-white text-[9px] rounded-lg uppercase font-black tracking-widest shadow-lg animate-pulse border border-red-400">คืนงาน</span>
+                                                                <span className="text-[7px] font-black text-red-500 uppercase mt-0.5 tracking-[0.1em]">รอจัดสรรใหม่</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -420,13 +423,25 @@ const ExpandableCell: React.FC<{
                                                         </div>
                                                     )}
 
+                                                    {/* Analyst Remarks (Observations from the lab) */}
+                                                    {task.analystRemark && (
+                                                        <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100/50 dark:border-emerald-800/30 rounded-2xl relative overflow-hidden">
+                                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+                                                            <div className="flex items-center gap-2 mb-1.5">
+                                                                <ClipboardListIcon className="h-3 w-3 text-emerald-500" />
+                                                                <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest opacity-70">Analyst Remark (From Floor)</span>
+                                                            </div>
+                                                            <p className="text-[11px] font-bold text-base-800 dark:text-emerald-100 italic leading-relaxed">{task.analystRemark}</p>
+                                                        </div>
+                                                    )}
+
                                                     {isReturned && task.returnReason && (
                                                         <div className="mt-1 flex items-start gap-3 text-[11px] text-red-700 dark:text-red-400 font-bold bg-red-100/50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-200 shadow-md">
                                                             <div className="p-1.5 bg-red-600 text-white rounded-lg flex-shrink-0 shadow-sm">
                                                                 <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
                                                             </div>
                                                             <div className="flex flex-col">
-                                                                <span className="text-[9px] uppercase tracking-wider text-red-500 font-black mb-0.5">Return Remark (From {task.returnedBy || 'Analyst'})</span>
+                                                                <span className="text-[9px] uppercase tracking-wider text-red-500 font-black mb-0.5">Return Reason (From {task.returnedBy || 'Personnel'})</span>
                                                                 <p className="italic leading-relaxed">"{task.returnReason}"</p>
                                                             </div>
                                                         </div>
@@ -538,7 +553,7 @@ const TasksTab: React.FC<{
             unmappedItems: { task: RawTask; originalIndex: number; sourceDocId: string }[]; 
             minDueDate: number;
             isSprint: boolean; isUrgent: boolean; isLSP: boolean; isPoCat: boolean; isReturned: boolean;
-            seenIds: Set<string>;
+            seenIds: Record<string, { task: RawTask; originalIndex: number; sourceDocId: string }>;
         }> = {};
         
         filteredTasks.forEach(taskGroup => {
@@ -549,7 +564,7 @@ const TasksTab: React.FC<{
                 mergedRows[rid] = { 
                     requestId: rid, cells: {}, unmappedItems: [], minDueDate: Infinity,
                     isSprint: false, isUrgent: false, isLSP: false, isPoCat: false, isReturned: false,
-                    seenIds: new Set<string>()
+                    seenIds: {}
                 };
             }
             const row = mergedRows[rid];
@@ -565,10 +580,30 @@ const TasksTab: React.FC<{
                 if (spec.isReturned) row.isReturned = true;
 
                 const taskId = task._id || `${task['Sample Name']}-${task['Description']}-${task['Variant']}`;
-                if (row.seenIds.has(taskId)) return;
-                row.seenIds.add(taskId);
-
                 const item = { task, originalIndex: index, sourceDocId: taskGroup.docId! };
+
+                // Dedup & Merge Logic: Prefer tasks with 'Returned' status
+                if (row.seenIds[taskId]) {
+                    const existing = row.seenIds[taskId];
+                    if (task.isReturned && !existing.task.isReturned) {
+                        // Current task is returned, previous wasn't. Swap it.
+                        // We need to find where it was stored and update it.
+                        // For simplicity, we just won't 'return' yet and instead overwrite the data later if needed.
+                        // But we must remove from wherever it was.
+                        const oldColKey = getTaskGridColumnKey(existing.task, testMappings) || 'unmapped';
+                        if (oldColKey === 'unmapped') {
+                            row.unmappedItems = row.unmappedItems.filter(i => i !== existing);
+                        } else {
+                            if (row.cells[oldColKey]) row.cells[oldColKey] = row.cells[oldColKey].filter(i => i !== existing);
+                        }
+                    } else {
+                        // Previous task was either returned or we are not returned. Skip.
+                        return;
+                    }
+                }
+                
+                row.seenIds[taskId] = item;
+
                 const columnKey = getTaskGridColumnKey(task, testMappings);
                 if (columnKey) {
                     if (!row.cells[columnKey]) row.cells[columnKey] = [];
@@ -811,6 +846,16 @@ Staff: ${staffList.join(', ')}`;
                                 </button>
                             ))}
                         </div>
+                        {/* Clean View Checkbox */}
+                        <label className="flex items-center gap-3 bg-base-100 dark:bg-base-900/50 p-2.5 px-4 rounded-2xl border border-base-200 dark:border-base-700 cursor-pointer hover:bg-white dark:hover:bg-base-800 transition-all group">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-base-500 group-hover:text-primary-600 transition-colors">Clean View</span>
+                             <input 
+                                type="checkbox" 
+                                checked={hideEmptyColumns}
+                                onChange={e => setHideEmptyColumns(e.target.checked)}
+                                className="h-5 w-5 rounded border-2 border-base-300 text-primary-600 focus:ring-0 cursor-pointer transition-all"
+                             />
+                        </label>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t-2 border-base-100 dark:border-base-700 pt-5">
                         <input type="text" placeholder="Search by Request ID..." value={filterRequestId} onChange={e => setFilterRequestId(e.target.value)} className="md:col-span-2 p-4 rounded-2xl bg-base-50 dark:bg-base-950 border-2 border-base-200 dark:border-base-700 text-[15px] font-black tracking-tight outline-none"/>
@@ -857,14 +902,13 @@ Staff: ${staffList.join(', ')}`;
                                     <tr key={row.requestId} className="hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors group">
                                         <td style={{ width: `${COL_DUE_WIDTH}px`, minWidth: `${COL_DUE_WIDTH}px` }} className="p-1 border-r border-base-200 dark:border-base-800 bg-base-50/95 dark:bg-base-900 sticky left-0 z-30 shadow-sm">{renderDueDateCell(row.minDueDate)}</td>
                                         <td style={{ width: `${COL_RID_WIDTH}px`, minWidth: `${COL_RID_WIDTH}px` }} className="px-4 py-3 font-black text-[15px] text-base-950 dark:text-base-50 border-r border-base-200 dark:border-base-800 bg-base-50/95 dark:bg-base-900 sticky left-[80px] z-30 shadow-sm">
-                                            <div className="flex items-center justify-between gap-4 w-full">
+                                            <div className="flex flex-col gap-2 w-full">
                                                 <span className="tracking-tight shrink-0 font-black text-[16px] text-slate-900 dark:text-slate-100">{row.requestId.replace(/^RS1-/, '')}</span>
-                                                <div className="flex flex-col gap-1 items-end min-w-[70px]">
-                                                    {/* REMOVED: row.isReturned Badge from Request ID column as requested */}
-                                                    {row.isSprint && <span className="px-2 py-0.5 bg-rose-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-rose-400 w-full text-center">Sprint</span>}
-                                                    {row.isUrgent && <span className="px-2 py-0.5 bg-orange-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-orange-400 w-full text-center">Urgent</span>}
-                                                    {row.isLSP && <span className="px-2 py-0.5 bg-cyan-500 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-cyan-400 w-full text-center">LSP</span>}
-                                                    {row.isPoCat && <span className="px-2 py-0.5 bg-violet-600 text-white text-[8px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-violet-500 w-full text-center">PoCat</span>}
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {row.isSprint && <span className="px-2 py-0.5 bg-rose-500 text-white text-[7px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-rose-400">Sprint</span>}
+                                                    {row.isUrgent && <span className="px-2 py-0.5 bg-orange-500 text-white text-[7px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-orange-400">Urgent</span>}
+                                                    {row.isLSP && <span className="px-2 py-0.5 bg-cyan-500 text-white text-[7px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-cyan-400">LSP</span>}
+                                                    {row.isPoCat && <span className="px-2 py-0.5 bg-violet-600 text-white text-[7px] rounded-md uppercase font-black tracking-widest shadow-sm ring-1 ring-violet-500">PoCat</span>}
                                                 </div>
                                             </div>
                                         </td>
